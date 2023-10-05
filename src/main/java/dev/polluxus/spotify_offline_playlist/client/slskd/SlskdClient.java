@@ -6,14 +6,12 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import dev.polluxus.spotify_offline_playlist.Config;
-import dev.polluxus.spotify_offline_playlist.client.musicbrainz.dto.MusicbrainzReleaseSearchResult;
 import dev.polluxus.spotify_offline_playlist.client.slskd.request.SlskdDownloadRequest;
 import dev.polluxus.spotify_offline_playlist.client.slskd.request.SlskdLoginRequest;
 import dev.polluxus.spotify_offline_playlist.client.slskd.request.SlskdSearchRequest;
 import dev.polluxus.spotify_offline_playlist.client.slskd.response.SlskdLoginResponse;
 import dev.polluxus.spotify_offline_playlist.client.slskd.response.SlskdSearchDetailResponse;
-import dev.polluxus.spotify_offline_playlist.client.slskd.response.SlskdSearchEntryResponse;
-import dev.polluxus.spotify_offline_playlist.store.FileBackedStore;
+import dev.polluxus.spotify_offline_playlist.client.slskd.response.SlskdSearchStateResponse;
 import org.apache.hc.client5.http.classic.HttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 import org.apache.hc.core5.http.ClassicHttpRequest;
@@ -55,6 +53,57 @@ public class SlskdClient {
         }
     }
 
+    public static void main(String[] args) throws InterruptedException {
+        final var c = create(new Config() {
+            @Override
+            public String spotifyClientId() {
+                return null;
+            }
+
+            @Override
+            public String spotifyClientSecret() {
+                return null;
+            }
+
+            @Override
+            public String spotifyPlaylistId() {
+                return null;
+            }
+
+            @Override
+            public String dataDirectory() {
+                return null;
+            }
+
+            @Override
+            public String slskdBaseUrl() {
+                return "http://burt-mediaserv:5030";
+            }
+
+            @Override
+            public String slskdUsername() {
+                return "slskd";
+            }
+
+            @Override
+            public String slskdPassword() {
+                return "slskd";
+            }
+        });
+        log.info("Client acuiqred");
+        final var resp1 = c.search("coil musick");
+
+        String state = "inprog";
+        while (!state.contains("Complete")) {
+            final var resp2 = c.getSearchState(resp1.id());
+            log.info("State: {}", resp2.state());
+            state = resp2.state();
+            Thread.sleep(100);
+        }
+
+        log.info("Search");
+    }
+
     public SlskdClient(String baseUrl, String username, String password, HttpClient client, ObjectMapper mapper) {
         this.baseUrl = baseUrl;
         this.username = username;
@@ -81,7 +130,7 @@ public class SlskdClient {
                 config.slskdBaseUrl(), config.slskdUsername(), config.slskdPassword(), client, mapper);
     }
 
-    public List<SlskdSearchEntryResponse> getSearches() {
+    public List<SlskdSearchStateResponse> getAllSearchStates() {
 
         ensureAuthValid();
         final var req = ClassicRequestBuilder.get(baseUrl + API_PREFIX + "/searches")
@@ -90,7 +139,16 @@ public class SlskdClient {
         return doRequest(req, new TypeReference<>() {});
     }
 
-    public List<SlskdSearchDetailResponse> getSearch(UUID id) {
+    public SlskdSearchStateResponse getSearchState(UUID id) {
+
+        ensureAuthValid();
+        final var req = ClassicRequestBuilder.get(baseUrl + API_PREFIX + "/searches/" + id)
+                .addHeader("Authorization", token.headerValue())
+                .build();
+        return doRequest(req, SlskdSearchStateResponse.class);
+    }
+
+    public List<SlskdSearchDetailResponse> getSearchResponses(UUID id) {
 
         ensureAuthValid();
         final var req = ClassicRequestBuilder.get(baseUrl + API_PREFIX + "/searches/" + id + "/responses")
@@ -99,14 +157,14 @@ public class SlskdClient {
         return doRequest(req, new TypeReference<>() {});
     }
 
-    public SlskdSearchEntryResponse search(String searchText) {
+    public SlskdSearchStateResponse search(String searchText) {
 
         ensureAuthValid();
         final var req = ClassicRequestBuilder.post(baseUrl + API_PREFIX + "/searches")
                 .addHeader("Authorization", token.headerValue())
                 .setEntity(writeValueAsBytesUnchecked(new SlskdSearchRequest(searchText)), ContentType.APPLICATION_JSON)
                 .build();
-        return doRequest(req, SlskdSearchEntryResponse.class);
+        return doRequest(req, SlskdSearchStateResponse.class);
     }
 
     public void initiateDownloads(final String hostUser, final List<SlskdDownloadRequest> files) {

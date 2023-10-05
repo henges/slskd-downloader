@@ -3,7 +3,7 @@ package dev.polluxus.spotify_offline_playlist.client.slskd.response;
 import java.util.List;
 import java.util.UUID;
 
-public record SlskdSearchEntryResponse(
+public record SlskdSearchStateResponse(
         String endedAt,
         int fileCount,
         UUID id,
