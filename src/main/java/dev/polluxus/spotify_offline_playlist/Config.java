@@ -10,4 +10,10 @@ public interface Config {
 
     @EnvVar(defaultValue = "~/.spotify_offline_playlist")
     String dataDirectory();
+
+    String slskdBaseUrl();
+    @EnvVar(defaultValue = "slskd")
+    String slskdUsername();
+    @EnvVar(defaultValue = "slskd")
+    String slskdPassword();
 }

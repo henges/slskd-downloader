@@ -57,10 +57,14 @@ public class SpotifyService {
             }
         }
 
-        final List<AlbumInfo> remoted = spotifyClient.getAlbums(toSearch);
-        remoted.forEach(ai -> albumStore.put(ai.spotifyId(), ai));
+        if (toSearch.size() > 0) {
+            initClient();
+            final List<AlbumInfo> remoted = spotifyClient.getAlbums(toSearch);
+            remoted.forEach(ai -> albumStore.put(ai.spotifyId(), ai));
 
-        results.addAll(remoted);
+            results.addAll(remoted);
+        }
+
         return results;
     }
 
@@ -79,7 +83,7 @@ public class SpotifyService {
             final List<String> albumArtists = Arrays.stream(album.getArtists()).map(ArtistSimplified::getName).toList();
             final String releaseDate = album.getReleaseDate();
 
-            return new PlaylistSong(trackName, trackArtists, new PlaylistAlbum(albumName, albumArtists, releaseDate));
+            return new PlaylistSong(trackName, trackArtists, new PlaylistAlbum(albumName, album.getId(), albumArtists, releaseDate));
         }).toList();
 
         return new Playlist(playlistName, songs);

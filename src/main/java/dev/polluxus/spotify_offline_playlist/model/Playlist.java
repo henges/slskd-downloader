@@ -15,6 +15,7 @@ public record Playlist(
 
     public record PlaylistAlbum(
             String name,
+            String spotifyId,
             List<String> artists,
             String releaseDate
     ) {}
