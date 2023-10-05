@@ -1,15 +1,17 @@
 package dev.polluxus.spotify_offline_playlist.client;
 
+import com.google.common.collect.Lists;
 import dev.polluxus.spotify_offline_playlist.Config;
+import dev.polluxus.spotify_offline_playlist.model.AlbumInfo;
 import se.michaelthelin.spotify.SpotifyApi;
 import se.michaelthelin.spotify.model_objects.credentials.ClientCredentials;
-import se.michaelthelin.spotify.model_objects.specification.Paging;
-import se.michaelthelin.spotify.model_objects.specification.Playlist;
-import se.michaelthelin.spotify.model_objects.specification.PlaylistTrack;
+import se.michaelthelin.spotify.model_objects.specification.*;
 import se.michaelthelin.spotify.requests.AbstractRequest;
+import se.michaelthelin.spotify.requests.data.albums.GetSeveralAlbumsRequest;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 
 public class SpotifyClient {
 
@@ -58,6 +60,26 @@ public class SpotifyClient {
             results.addAll(List.of(r.getItems()));
             hasNext = r.getNext() != null;
         } while(hasNext);
+
+        return results;
+    }
+
+    public List<AlbumInfo> getAlbums(List<String> albumIds) {
+
+        final List<GetSeveralAlbumsRequest> reqs = Lists.partition(albumIds, 20).stream()
+                .map(l -> spotify.getSeveralAlbums(l.toArray(String[]::new)).build())
+                .toList();
+        final List<AlbumInfo> results = new ArrayList<>();
+        for (var r: reqs) {
+            Album[] res = executeUnchecked(r);
+            results.addAll(Stream.of(res)
+                    .map(a -> new AlbumInfo(a.getName(),
+                            a.getId(),
+                            Stream.of(a.getTracks().getItems()).map(TrackSimplified::getName).toList(),
+                            Stream.of(a.getArtists()).map(ArtistSimplified::getName).toList()
+                            ))
+                    .toList());
+        }
 
         return results;
     }

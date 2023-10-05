@@ -1,8 +1,10 @@
 package dev.polluxus.spotify_offline_playlist;
 
 import au.com.muel.envconfig.EnvConfig;
+import dev.polluxus.spotify_offline_playlist.client.musicbrainz.MusicbrainzClient;
+import dev.polluxus.spotify_offline_playlist.client.musicbrainz.dto.MusicbrainzReleaseSearchResult;
 import dev.polluxus.spotify_offline_playlist.model.Playlist;
-import dev.polluxus.spotify_offline_playlist.model.Playlist.Album;
+import dev.polluxus.spotify_offline_playlist.model.Playlist.PlaylistAlbum;
 import dev.polluxus.spotify_offline_playlist.model.Playlist.PlaylistSong;
 import dev.polluxus.spotify_offline_playlist.service.SpotifyService;
 import org.slf4j.Logger;
@@ -19,16 +21,21 @@ public class SpotifyOfflinePlaylist {
         final Config config = EnvConfig.fromEnv(Config.class);
         final String playlistId = config.spotifyPlaylistId();
         final SpotifyService spotifyService = new SpotifyService(config);
-        process(playlistId, spotifyService);
+        final MusicbrainzClient musicbrainzClient = MusicbrainzClient.create(config);
+        process(playlistId, spotifyService, musicbrainzClient);
     }
 
     record Deps (SpotifyService spotify) {}
 
-    public static void process(String playlistId, SpotifyService spotifyService) {
+    public static void process(String playlistId, SpotifyService spotifyService, MusicbrainzClient musicbrainzClient) {
 
         final Playlist p = spotifyService.getPlaylist(playlistId);
-        final List<Album> distinctAlbums = p.tracks().stream().map(PlaylistSong::album).distinct().toList();
-        distinctAlbums.forEach(a -> log.info("{}", a));
+        final List<PlaylistAlbum> distinctPlaylistAlbums = p.tracks().stream().map(PlaylistSong::playlistAlbum).distinct().toList();
+        distinctPlaylistAlbums.forEach(a -> log.info("{}", a));
+        distinctPlaylistAlbums.forEach(a -> {
+            final MusicbrainzReleaseSearchResult res = musicbrainzClient.searchReleases(a.artists().get(0), a.name());
+            log.info("{}", res);
+        });
     }
 
 

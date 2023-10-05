@@ -10,10 +10,10 @@ public record Playlist(
     public record PlaylistSong(
             String name,
             List<String> artists,
-            Album album
+            PlaylistAlbum playlistAlbum
     ) {}
 
-    public record Album(
+    public record PlaylistAlbum(
             String name,
             List<String> artists,
             String releaseDate

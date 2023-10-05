@@ -35,6 +35,13 @@ public class FileBackedStore<T> implements Store<T> {
     }
 
     @Override
+    public boolean has(String key) {
+
+        final File data = Path.of(parentDir.getPath(), key + ".json").toFile();
+        return data.exists();
+    }
+
+    @Override
     public T get(final String key) {
 
         final File data = Path.of(parentDir.getPath(), key + ".json").toFile();

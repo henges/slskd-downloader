@@ -2,15 +2,14 @@ package dev.polluxus.spotify_offline_playlist.service;
 
 import dev.polluxus.spotify_offline_playlist.Config;
 import dev.polluxus.spotify_offline_playlist.client.SpotifyClient;
+import dev.polluxus.spotify_offline_playlist.model.AlbumInfo;
 import dev.polluxus.spotify_offline_playlist.model.Playlist;
-import dev.polluxus.spotify_offline_playlist.model.Playlist.Album;
+import dev.polluxus.spotify_offline_playlist.model.Playlist.PlaylistAlbum;
 import dev.polluxus.spotify_offline_playlist.model.Playlist.PlaylistSong;
 import dev.polluxus.spotify_offline_playlist.store.FileBackedStore;
-import se.michaelthelin.spotify.model_objects.specification.AlbumSimplified;
-import se.michaelthelin.spotify.model_objects.specification.ArtistSimplified;
-import se.michaelthelin.spotify.model_objects.specification.PlaylistTrack;
-import se.michaelthelin.spotify.model_objects.specification.Track;
+import se.michaelthelin.spotify.model_objects.specification.*;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -18,11 +17,13 @@ public class SpotifyService {
 
     private SpotifyClient spotifyClient;
     private final Config config;
-    private final FileBackedStore<Playlist> store;
+    private final FileBackedStore<Playlist> playlistStore;
+    private final FileBackedStore<AlbumInfo> albumStore;
 
     public SpotifyService(Config config) {
         this.config = config;
-        this.store = FileBackedStore.from(config, Playlist.class);
+        this.playlistStore = FileBackedStore.from(config, Playlist.class);
+        this.albumStore = FileBackedStore.from(config, AlbumInfo.class);
     }
 
     private void initClient() {
@@ -33,17 +34,37 @@ public class SpotifyService {
 
     public Playlist getPlaylist(String playlistId) {
 
-        final Playlist memo = store.get(playlistId);
+        final Playlist memo = playlistStore.get(playlistId);
         if (memo != null) {
             return memo;
         }
 
-        final Playlist result = getPlaylist(config, playlistId);
-        store.put(playlistId, result);
+        final Playlist result = getPlaylistInternal(playlistId);
+        playlistStore.put(playlistId, result);
         return result;
     }
 
-    private Playlist getPlaylist(Config config, String playlistId) {
+    public List<AlbumInfo> getAlbums(final List<String> albumIds) {
+
+        final List<String> toSearch = new ArrayList<>();
+        final List<AlbumInfo> results = new ArrayList<>();
+        for (var id : albumIds) {
+            final AlbumInfo memo = albumStore.get(id);
+            if (memo != null) {
+                results.add(memo);
+            } else {
+                toSearch.add(id);
+            }
+        }
+
+        final List<AlbumInfo> remoted = spotifyClient.getAlbums(toSearch);
+        remoted.forEach(ai -> albumStore.put(ai.spotifyId(), ai));
+
+        results.addAll(remoted);
+        return results;
+    }
+
+    private Playlist getPlaylistInternal(String playlistId) {
 
         initClient();
         final String playlistName = spotifyClient.getPlaylist(playlistId).getName();
@@ -52,11 +73,13 @@ public class SpotifyService {
             Track t = (Track) p.getTrack();
             final String trackName = t.getName();
             final List<String> trackArtists = Arrays.stream(t.getArtists()).map(ArtistSimplified::getName).toList();
+
             final AlbumSimplified album = t.getAlbum();
             final String albumName = album.getName();
             final List<String> albumArtists = Arrays.stream(album.getArtists()).map(ArtistSimplified::getName).toList();
             final String releaseDate = album.getReleaseDate();
-            return new PlaylistSong(trackName, trackArtists, new Album(albumName, albumArtists, releaseDate));
+
+            return new PlaylistSong(trackName, trackArtists, new PlaylistAlbum(albumName, albumArtists, releaseDate));
         }).toList();
 
         return new Playlist(playlistName, songs);
