@@ -4,6 +4,7 @@ import au.com.muel.envconfig.EnvConfig;
 import dev.polluxus.spotify_offline_playlist.client.musicbrainz.MusicbrainzClient;
 import dev.polluxus.spotify_offline_playlist.client.musicbrainz.dto.MusicbrainzReleaseSearchResult;
 import dev.polluxus.spotify_offline_playlist.client.slskd.SlskdClient;
+import dev.polluxus.spotify_offline_playlist.client.slskd.request.SlskdDownloadRequest;
 import dev.polluxus.spotify_offline_playlist.client.slskd.response.SlskdSearchDetailResponse;
 import dev.polluxus.spotify_offline_playlist.client.slskd.response.SlskdSearchDetailResponse.SlskdSearchMatchResponse;
 import dev.polluxus.spotify_offline_playlist.model.AlbumInfo;
@@ -16,10 +17,7 @@ import dev.polluxus.spotify_offline_playlist.util.TriFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -48,7 +46,7 @@ public class SpotifyOfflinePlaylist {
         final List<AlbumInfo> albumInfos = spotifyService.getAlbums(distinctPlaylistAlbums.stream().map(PlaylistAlbum::spotifyId).toList());
 
         List<CompletableFuture<List<SlskdSearchDetailResponse>>> requestsInFlight = new ArrayList<>();
-        final List<CompletableFuture<List<SlskdSearchDetailResponse>>> allRequests = new ArrayList<>();
+        final Map<String, CompletableFuture<List<SlskdSearchDetailResponse>>> allRequests = new HashMap<>();
         for (var ai : albumInfos) {
             if (requestsInFlight.size() >= 10) {
                 CompletableFuture.allOf(requestsInFlight.toArray(CompletableFuture[]::new)).join();
@@ -71,10 +69,50 @@ public class SpotifyOfflinePlaylist {
                 return sorted;
             });
             requestsInFlight.add(future);
-            allRequests.add(future);
+            allRequests.put(ai.name() + " " + String.join(", ", ai.artists()), future);
         }
-        CompletableFuture.allOf(requestsInFlight.toArray(CompletableFuture[]::new)).join();
-        allRequests
+        CompletableFuture.allOf(allRequests.values().toArray(CompletableFuture[]::new)).join();
+        Scanner scanner = new Scanner(System.in);
+        for (var res : allRequests.entrySet()) {
+
+            final String searchString = res.getKey();
+            final List<SlskdSearchDetailResponse> results = res.getValue().join();
+            System.out.println("For query " + searchString);
+            if (results.isEmpty()) {
+                log.info("No good results for this query :\\");
+                continue;
+            }
+
+            for (var e : results) {
+                System.out.println("Will download these files from " + e.username() +": ");
+                for (var f : e.files()) {
+                    System.out.printf("\t%s\n", f.filename());
+                }
+                System.out.println("OK? [y/n/skip]");
+                boolean responseOk = false;
+                String response;
+                do {
+                    response = scanner.nextLine();
+                    switch (response) {
+                        case "y", "n", "skip" -> responseOk = true;
+                        default -> System.out.println("Invalid response");
+                    }
+                } while (!responseOk);
+                if (response.equals("n")) {
+                    continue;
+                }
+                if (response.equals("skip")) {
+                    break;
+                }
+                boolean ok = slskdService.initiateDownloads(e.username(), e.files().stream().map(f -> new SlskdDownloadRequest(f.filename(), f.size())).toList());
+                if (ok) {
+                    log.info("initated download for {} from {} OK.", searchString, e.username());
+                    break;
+                } else {
+                    log.info("Failed to download {} from {}... trying next result", searchString, e.username());
+                }
+            }
+        }
 
 
     }

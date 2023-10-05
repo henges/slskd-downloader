@@ -126,8 +126,10 @@ public class SlskdClient {
                 .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                 .registerModule(new Jdk8Module())
                 ;
-        return new SlskdClient(
+        final SlskdClient ret = new SlskdClient(
                 config.slskdBaseUrl(), config.slskdUsername(), config.slskdPassword(), client, mapper);
+        ret.ensureAuthValid();
+        return ret;
     }
 
     public List<SlskdSearchStateResponse> getAllSearchStates() {
