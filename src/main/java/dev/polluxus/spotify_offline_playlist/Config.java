@@ -1,0 +1,13 @@
+package dev.polluxus.spotify_offline_playlist;
+
+import au.com.muel.envconfig.EnvVar;
+
+public interface Config {
+
+    String spotifyClientId();
+    String spotifyClientSecret();
+    String spotifyPlaylistId();
+
+    @EnvVar(defaultValue = "~/.spotify_offline_playlist")
+    String dataDirectory();
+}
