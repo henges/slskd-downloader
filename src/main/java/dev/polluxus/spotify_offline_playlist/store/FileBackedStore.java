@@ -4,12 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.polluxus.spotify_offline_playlist.Config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import se.michaelthelin.spotify.model_objects.specification.Playlist;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Path;
 
 public class FileBackedStore<T> implements Store<T> {
@@ -49,9 +46,6 @@ public class FileBackedStore<T> implements Store<T> {
             return null;
         }
         try {
-            InputStream in = new FileInputStream(data);
-            final String s = new String(in.readAllBytes());
-            log.info("{}", s);
             return mapper.readValue(data, klazz);
         } catch (IOException e) {
             log.error("Error reading path {}", data.getPath(), e);

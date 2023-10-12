@@ -6,8 +6,6 @@ import dev.polluxus.spotify_offline_playlist.client.slskd.request.SlskdDownloadR
 import dev.polluxus.spotify_offline_playlist.client.slskd.response.SlskdSearchDetailResponse;
 import dev.polluxus.spotify_offline_playlist.client.slskd.response.SlskdSearchStateResponse;
 import dev.polluxus.spotify_offline_playlist.model.AlbumInfo;
-import org.apache.hc.core5.http.ContentType;
-import org.apache.hc.core5.http.io.support.ClassicRequestBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,20 +30,28 @@ public class SlskdService {
     public SlskdService(Config config) {
         this.client = SlskdClient.create(config);
         this.pool = Executors.newWorkStealingPool();
-        this.scheduler = Executors.newSingleThreadScheduledExecutor();
+        this.scheduler = Executors.newScheduledThreadPool(1);
         // Repeatedly poll for current searches to avoid bombarding
-        scheduler.scheduleAtFixedRate(() -> {
+        Runnable run = () -> {
             synchronized (searchStatesMu) {
                 log.info("Running scheudled search state update");
-                allSearchStates = client.getAllSearchStates()
-                        .stream()
-                        .collect(Collectors.toMap(
-                                SlskdSearchStateResponse::searchText,
-                                Function.identity()
-                        ));
+                try {
+                    allSearchStates = client.getAllSearchStates()
+                            .stream()
+                            .filter(r -> r.responses().size() > 0)
+                            .collect(Collectors.toMap(
+                                    SlskdSearchStateResponse::searchText,
+                                    Function.identity(),
+                                    (e1, e2) -> e1
+                            ));
+                } catch (Exception e) {
+                    log.error("Error in scheduled refresh", e);
+                }
                 log.info("Scheduled search state update complete");
             }
-        }, 0, 15, TimeUnit.SECONDS);
+        };
+        run.run();
+        scheduler.scheduleAtFixedRate(run, 15, 15, TimeUnit.SECONDS);
     }
 
     public CompletableFuture<List<SlskdSearchDetailResponse>> search(final AlbumInfo albumInfo) {
@@ -61,7 +67,9 @@ public class SlskdService {
             synchronized (searchStatesMu) {
                 if (allSearchStates.containsKey(searchString)) {
                     initResp = allSearchStates.get(searchString);
+                    log.info("Found existing response for {}", searchString);
                 } else {
+                    log.info("Creating new search for {}", searchString);
                     initResp = client.search(searchString);
                 }
             }
@@ -77,9 +85,16 @@ public class SlskdService {
                 }
             }
 
-            return client.getSearchResponses(initResp.id());
+            var responses = client.getSearchResponses(initResp.id());
+
+            log.info("Got {} responses for query {}", responses.size(), searchString);
+
+            return responses;
             }, this.pool)
-            .exceptionally(t -> List.of());
+            .exceptionally(t -> {
+                log.error("Exception while retrieving search for {}", searchString, t);
+                return List.of();
+            });
     }
 
     public boolean initiateDownloads(final String hostUser, final List<SlskdDownloadRequest> files) {
