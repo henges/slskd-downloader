@@ -12,8 +12,6 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 public class SlskdService {
 
@@ -31,27 +29,27 @@ public class SlskdService {
         this.client = SlskdClient.create(config);
         this.pool = Executors.newWorkStealingPool();
         this.scheduler = Executors.newScheduledThreadPool(1);
-        // Repeatedly poll for current searches to avoid bombarding
-        Runnable run = () -> {
-            synchronized (searchStatesMu) {
-                log.info("Running scheudled search state update");
-                try {
-                    allSearchStates = client.getAllSearchStates()
-                            .stream()
-                            .filter(r -> r.responses().size() > 0)
-                            .collect(Collectors.toMap(
-                                    SlskdSearchStateResponse::searchText,
-                                    Function.identity(),
-                                    (e1, e2) -> e1
-                            ));
-                } catch (Exception e) {
-                    log.error("Error in scheduled refresh", e);
-                }
-                log.info("Scheduled search state update complete");
-            }
-        };
-        run.run();
-        scheduler.scheduleAtFixedRate(run, 15, 15, TimeUnit.SECONDS);
+//        // Repeatedly poll for current searches to avoid bombarding
+//        Runnable run = () -> {
+//            synchronized (searchStatesMu) {
+//                log.info("Running scheudled search state update");
+//                try {
+//                    allSearchStates = client.getAllSearchStates()
+//                            .stream()
+//                            .filter(r -> r.responses().size() > 0)
+//                            .collect(Collectors.toMap(
+//                                    SlskdSearchStateResponse::searchText,
+//                                    Function.identity(),
+//                                    (e1, e2) -> e1
+//                            ));
+//                } catch (Exception e) {
+//                    log.error("Error in scheduled refresh", e);
+//                }
+//                log.info("Scheduled search state update complete");
+//            }
+//        };
+//        run.run();
+//        scheduler.scheduleAtFixedRate(run, 15, 15, TimeUnit.SECONDS);
     }
 
     public CompletableFuture<List<SlskdSearchDetailResponse>> search(final AlbumInfo albumInfo) {

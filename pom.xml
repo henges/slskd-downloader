@@ -57,5 +57,10 @@
       <artifactId>logback-classic</artifactId>
       <version>1.4.7</version>
     </dependency>
+    <dependency>
+      <groupId>org.beryx</groupId>
+      <artifactId>text-io</artifactId>
+      <version>3.4.1</version>
+    </dependency>
   </dependencies>
 </project>

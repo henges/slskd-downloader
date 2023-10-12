@@ -5,7 +5,9 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+import com.google.common.collect.Lists;
 import dev.polluxus.spotify_offline_playlist.Config;
+import dev.polluxus.spotify_offline_playlist.client.AbstractHttpClient;
 import dev.polluxus.spotify_offline_playlist.client.slskd.request.SlskdDownloadRequest;
 import dev.polluxus.spotify_offline_playlist.client.slskd.request.SlskdLoginRequest;
 import dev.polluxus.spotify_offline_playlist.client.slskd.request.SlskdSearchRequest;
@@ -23,10 +25,12 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
-public class SlskdClient {
+public class SlskdClient extends AbstractHttpClient {
 
     private static final Logger log = LoggerFactory.getLogger(SlskdClient.class);
 
@@ -35,8 +39,6 @@ public class SlskdClient {
     private final String baseUrl;
     private final String username;
     private final String password;
-    private final HttpClient client;
-    private final ObjectMapper mapper;
 
     private SlskdToken token;
 
@@ -91,25 +93,21 @@ public class SlskdClient {
             }
         });
         log.info("Client acuiqred");
-        final var resp1 = c.search("coil musick");
+        final List<SlskdSearchStateResponse> states = c.getAllSearchStates();
+        final List<SlskdSearchStateResponse> reversed = Lists.reverse(states);
+        final List<SlskdSearchStateResponse> mostRecent10 = reversed.stream().filter(s -> !"coil musick".equals(s.searchText())).limit(10).toList();
+        final var mostRecent10Details = mostRecent10.stream()
+                .map(r -> c.getSearchResponses(r.id()))
+                .toList();
 
-        String state = "inprog";
-        while (!state.contains("Complete")) {
-            final var resp2 = c.getSearchState(resp1.id());
-            log.info("State: {}", resp2.state());
-            state = resp2.state();
-            Thread.sleep(100);
-        }
-
-        log.info("Search");
+        log.info("Stop");
     }
 
-    public SlskdClient(String baseUrl, String username, String password, HttpClient client, ObjectMapper mapper) {
+    private SlskdClient(String baseUrl, String username, String password, HttpClient client, ObjectMapper mapper) {
+        super(client, mapper);
         this.baseUrl = baseUrl;
         this.username = username;
         this.password = password;
-        this.client = client;
-        this.mapper = mapper;
     }
 
     private void ensureAuthValid() {
@@ -185,75 +183,5 @@ public class SlskdClient {
                 .setEntity(writeValueAsBytesUnchecked(new SlskdLoginRequest(username, password)), ContentType.APPLICATION_JSON)
                 .build();
         return doRequest(req, SlskdLoginResponse.class);
-    }
-
-    private <T> T doRequest(final ClassicHttpRequest req, final Class<T> klazz) {
-
-        return doRequest(req, 200, klazz);
-    }
-
-
-    private <T> T doRequest(final ClassicHttpRequest req, final TypeReference<T> typeReference) {
-
-        return doRequest(req, 200, typeReference);
-    }
-
-    private <T> T doRequest(final ClassicHttpRequest req, final int expectedStatus, final Class<T> klazz) {
-
-        return executeUnchecked(req, resp -> {
-            if (resp.getCode() != expectedStatus) {
-                throw new RuntimeException("Expected status code " + expectedStatus + ", but got " + resp.getCode());
-            }
-            if (klazz == Void.class) {
-                return null;
-            }
-            return readValueUnchecked(resp.getEntity().getContent(), klazz);
-        });
-    }
-
-    private <T> T doRequest(final ClassicHttpRequest req, final int expectedStatus, final TypeReference<T> typeReference) {
-
-        return executeUnchecked(req, resp -> {
-            if (resp.getCode() != expectedStatus) {
-                throw new RuntimeException("Expected status code " + expectedStatus + ", but got " + resp.getCode());
-            }
-            return readValueUnchecked(resp.getEntity().getContent(), typeReference);
-        });
-    }
-
-    private <T> T executeUnchecked(ClassicHttpRequest req, HttpClientResponseHandler<T> handler) {
-
-        try {
-            return client.execute(req, handler);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private <T> T readValueUnchecked(final InputStream in, Class<T> klazz) {
-
-        try {
-            return mapper.readValue(in, klazz);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private <T> T readValueUnchecked(final InputStream in, TypeReference<T> klazz) {
-
-        try {
-            return mapper.readValue(in, klazz);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private byte[] writeValueAsBytesUnchecked(final Object value) {
-
-        try {
-            return mapper.writeValueAsBytes(value);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
-        }
     }
 }

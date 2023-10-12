@@ -87,11 +87,13 @@ public class SpotifyOfflinePlaylist {
 
         public static int score(SlskdSearchDetailResponse result, List<String> targetTrackNames) {
 
-            boolean hasRightFormat = Heuristics.hasRightFormatAndLength.apply(result, "mp3", targetTrackNames.size());
+            boolean hasRightFormat = Heuristics.hasRightFormatAndLength.apply(result, "flac", targetTrackNames.size());
             boolean hasRightBitrate = Heuristics.hasRightBitrate.apply(result, 224, "GE");
             boolean hasAllTracks = Heuristics.hasAllTracks.apply(result, targetTrackNames);
 
-            return (hasAllTracks ? 5 : 0) + (hasRightFormat ? 3 : 0) + (hasRightBitrate ? 1 : 0);
+            return (hasAllTracks ? 5 : 0) + (hasRightFormat ? 3 : 0)
+                    + (hasRightBitrate ? 1 : 0)
+                    ;
         }
 
         static TriFunction<SlskdSearchDetailResponse, String, Integer, Boolean> hasRightFormatAndLength = (res, fmt, len) -> {
@@ -134,7 +136,7 @@ public class SpotifyOfflinePlaylist {
 
         private boolean isLocked = false;
 
-        public DownloadConfirmer(
+        private DownloadConfirmer(
                 SlskdService service) {
             this.queue = new ArrayDeque<>();
             this.scanner = new Scanner(System.in);

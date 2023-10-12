@@ -4,6 +4,7 @@
 <configuration>
     <import class="ch.qos.logback.classic.encoder.PatternLayoutEncoder"/>
     <import class="ch.qos.logback.core.ConsoleAppender"/>
+    <import class="ch.qos.logback.core.rolling.RollingFileAppender"/>
 
     <appender name="STDOUT" class="ConsoleAppender">
         <encoder class="PatternLayoutEncoder">
@@ -11,6 +12,7 @@
         </encoder>
     </appender>
 
+    <!--  Quieten Httpcomponents which is very noisy at DEBUG level -->
     <logger name="org.apache.hc" level="INFO"/>
 
     <root level="debug">
