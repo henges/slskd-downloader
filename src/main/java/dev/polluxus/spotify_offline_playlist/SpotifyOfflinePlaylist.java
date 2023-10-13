@@ -8,9 +8,10 @@ import dev.polluxus.spotify_offline_playlist.client.musicbrainz.MusicbrainzClien
 import dev.polluxus.spotify_offline_playlist.client.musicbrainz.dto.MusicbrainzRecording;
 import dev.polluxus.spotify_offline_playlist.client.musicbrainz.dto.MusicbrainzRecording.MusicbrainzTrack;
 import dev.polluxus.spotify_offline_playlist.client.musicbrainz.dto.MusicbrainzReleaseSearchResult;
-import dev.polluxus.spotify_offline_playlist.client.slskd.request.SlskdDownloadRequest;
 import dev.polluxus.spotify_offline_playlist.config.Config;
 import dev.polluxus.spotify_offline_playlist.config.JacksonConfig;
+import dev.polluxus.spotify_offline_playlist.model.AlbumInfo.AlbumTrack;
+import dev.polluxus.spotify_offline_playlist.processor.DownloadProcessor;
 import dev.polluxus.spotify_offline_playlist.model.AlbumArtistPair;
 import dev.polluxus.spotify_offline_playlist.model.AlbumInfo;
 import dev.polluxus.spotify_offline_playlist.model.Playlist;
@@ -21,7 +22,6 @@ import dev.polluxus.spotify_offline_playlist.processor.SlskdResponseProcessor;
 import dev.polluxus.spotify_offline_playlist.processor.model.ProcessorSearchResult;
 import dev.polluxus.spotify_offline_playlist.service.SlskdService;
 import dev.polluxus.spotify_offline_playlist.service.SpotifyService;
-import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,19 +39,25 @@ public class SpotifyOfflinePlaylist {
 
         final Config config = EnvConfig.fromEnv(Config.class);
         final String playlistId = config.spotifyPlaylistId();
+        final File fileSrc = new File(config.fileSource());
 
         final SpotifyService spotifyService = new SpotifyService(config);
         final SlskdService slskdService = new SlskdService(config);
-        process(playlistId, spotifyService, slskdService);
+        final MusicbrainzClient musicbrainzClient = MusicbrainzClient.create(config);
+//        final Iterator<AlbumInfo> spotifySupplier = spotifyPlaylistSupplier(spotifyService, playlistId);
+        final Iterator<AlbumInfo> musicbrainzSupplier = musicbrainzFileSupplier(musicbrainzClient, fileSrc);
+
+        process(musicbrainzSupplier, slskdService);
     }
 
-    public static void process(String playlistId, SpotifyService spotifyService, SlskdService slskdService) {
+    public static void process(final Iterator<AlbumInfo> supplier, SlskdService slskdService) {
 
         final SlskdResponseProcessor processor = new SlskdResponseProcessor(MatchStrategyType.EDIT_DISTANCE);
-        final DownloadConfirmer downloadConfirmer = new DownloadConfirmer(slskdService);
-        final Iterator<AlbumInfo> albumInfos = spotifyPlaylistSupplier(spotifyService, playlistId);
+        final DownloadProcessor downloadProcessor = DownloadProcessor.start(slskdService);
 
-        processLoop(albumInfos, slskdService, processor, downloadConfirmer);
+        processLoop(supplier, slskdService, processor, downloadProcessor);
+        downloadProcessor.stop();
+        slskdService.shutdown();
     }
 
     public static Iterator<AlbumInfo> spotifyPlaylistSupplier(final SpotifyService spotifyService, final String playlistId) {
@@ -95,11 +101,12 @@ public class SpotifyOfflinePlaylist {
                 if (recording.media().size() == 0) {
                     return this.hasNext();
                 }
-                final List<String> trackTitles = recording.media().get(0)
-                        .tracks().stream().map(MusicbrainzTrack::title)
+                final List<AlbumTrack> tracks = recording.media().stream()
+                        .flatMap(m -> m.tracks().stream())
+                        .map(t -> new AlbumTrack(t.number(), t.title()))
                         .toList();
 
-                next = new AlbumInfo(albumName, null, trackTitles, List.of(artistName));
+                next = new AlbumInfo(albumName, null, tracks, List.of(artistName));
 
                 return true;
             }
@@ -141,96 +148,5 @@ public class SpotifyOfflinePlaylist {
         }
         CompletableFuture.allOf(allRequests.toArray(CompletableFuture[]::new)).join();
         log.info("All requests done.");
-    }
-
-    public static class DownloadConfirmer implements Function<ProcessorSearchResult, CompletableFuture<Void>> {
-
-        private final BlockingQueue<Pair<ProcessorSearchResult, CompletableFuture<Void>>> queue;
-        private final Scanner scanner;
-        private final SlskdService service;
-        private final ExecutorService executor;
-
-        private DownloadConfirmer(
-                SlskdService service) {
-            this.queue = new ArrayBlockingQueue<>(500);
-            this.scanner = new Scanner(System.in);
-            this.service = service;
-            this.executor = Executors.newFixedThreadPool(1);
-        }
-
-        public static DownloadConfirmer start(SlskdService service) {
-
-            var dc = new DownloadConfirmer(service);
-            dc.executor.submit(dc::confirm);
-            return dc;
-        }
-
-        public void stop() {
-            this.executor.shutdown();
-            try {
-                this.executor.awaitTermination(15000, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        public CompletableFuture<Void> apply(ProcessorSearchResult result) {
-
-            CompletableFuture<Void> cf = new CompletableFuture<>();
-            queue.offer(Pair.of(result, cf));
-            return cf;
-        }
-
-        private void confirm() {
-            while (true) {
-                final Pair<ProcessorSearchResult, CompletableFuture<Void>> pair;
-                try {
-                    pair = queue.take();
-                } catch (InterruptedException e) {
-                    log.error("Was interrupted", e);
-                    continue;
-                }
-                final var res = pair.getKey();
-                final var future = pair.getValue();
-                final String searchString = res.albumInfo().searchString();
-                System.out.println("For query " + searchString);
-                if (res.userResults().isEmpty()) {
-                    log.info("No good results for this query :\\");
-                    continue;
-                }
-
-                for (var e : res.userResults()) {
-                    System.out.println("Will download these files from " + e.username() +": ");
-                    for (var f : e.bestCandidates()) {
-                        System.out.printf("\t%s\n", f.originalData().filename());
-                    }
-                    System.out.println("OK? [y/n/skip]");
-                    boolean responseOk = false;
-                    String response;
-                    do {
-                        response = scanner.nextLine();
-                        switch (response) {
-                            case "y", "n", "skip" -> responseOk = true;
-                            default -> System.out.println("Invalid response");
-                        }
-                    } while (!responseOk);
-                    if (response.equals("n")) {
-                        continue;
-                    }
-                    if (response.equals("skip")) {
-                        break;
-                    }
-                    boolean ok = service.initiateDownloads(e.username(), e.bestCandidates().stream()
-                            .map(f -> new SlskdDownloadRequest(f.originalData().filename(), f.originalData().size())).toList());
-                    if (ok) {
-                        log.info("initiated download for {} from {} OK.", searchString, e.username());
-                        break;
-                    } else {
-                        log.info("Failed to download {} from {}... trying next result", searchString, e.username());
-                    }
-                }
-                future.complete(null);
-            }
-        }
     }
 }

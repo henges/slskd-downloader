@@ -21,7 +21,7 @@ public class PatternMatchStrategy implements MatchStrategy {
         // TODO: We need to distance match here. Otherwise we will miss tracks
         //  because of small typos in track names (on either sender or receiver side).
         final List<Pattern> patterns = albumInfo.tracks().stream()
-                .map(n -> Pattern.compile(n, Pattern.CASE_INSENSITIVE))
+                .map(n -> Pattern.compile(n.title(), Pattern.CASE_INSENSITIVE))
                 .toList();
 
         // Iterate through all the responses and record the first one that matches

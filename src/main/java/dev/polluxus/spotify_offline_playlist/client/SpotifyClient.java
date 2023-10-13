@@ -3,6 +3,7 @@ package dev.polluxus.spotify_offline_playlist.client;
 import com.google.common.collect.Lists;
 import dev.polluxus.spotify_offline_playlist.config.Config;
 import dev.polluxus.spotify_offline_playlist.model.AlbumInfo;
+import dev.polluxus.spotify_offline_playlist.model.AlbumInfo.AlbumTrack;
 import se.michaelthelin.spotify.SpotifyApi;
 import se.michaelthelin.spotify.model_objects.credentials.ClientCredentials;
 import se.michaelthelin.spotify.model_objects.specification.*;
@@ -75,7 +76,7 @@ public class SpotifyClient {
             results.addAll(Stream.of(res)
                     .map(a -> new AlbumInfo(a.getName(),
                             a.getId(),
-                            Stream.of(a.getTracks().getItems()).map(TrackSimplified::getName).toList(),
+                            Stream.of(a.getTracks().getItems()).map(i -> new AlbumTrack(String.valueOf(i.getTrackNumber()), i.getName())).toList(),
                             Stream.of(a.getArtists()).map(ArtistSimplified::getName).toList()
                             ))
                     .toList());

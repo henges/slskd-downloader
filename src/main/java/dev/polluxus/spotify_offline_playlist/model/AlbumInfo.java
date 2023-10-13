@@ -6,9 +6,14 @@ import java.util.List;
 public record AlbumInfo(
         String name,
         @Nullable String spotifyId,
-        List<String> tracks,
+        List<AlbumTrack> tracks,
         List<String> artists
 ) {
+
+    public record AlbumTrack(
+            String number,
+            String title
+    ) {}
 
     public String searchString() {
 

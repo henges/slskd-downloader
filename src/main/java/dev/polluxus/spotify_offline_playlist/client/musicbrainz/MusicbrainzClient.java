@@ -106,7 +106,9 @@ public class MusicbrainzClient {
 
     public enum SearchOptions {
         SORTED_DATE((r) -> {
-            final var sorted = r.releases().stream().sorted(Comparator.comparing(MusicbrainzRelease::date)).toList();
+            final var sorted = r.releases().stream()
+                    .filter(e -> e.date() != null)
+                    .sorted(Comparator.comparing(MusicbrainzRelease::date)).toList();
             return new MusicbrainzReleaseSearchResult(r.created(), r.count(), r.offset(), sorted);
         });
 

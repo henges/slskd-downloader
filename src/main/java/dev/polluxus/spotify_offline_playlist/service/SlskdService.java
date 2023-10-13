@@ -12,6 +12,8 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class SlskdService {
 
@@ -19,37 +21,21 @@ public class SlskdService {
 
     private final SlskdClient client;
     private final ExecutorService pool;
-    private final ScheduledExecutorService scheduler;
-
-    private static final Object searchStatesMu = new Object();
     private Map<String, SlskdSearchStateResponse> allSearchStates;
 
 
     public SlskdService(Config config) {
         this.client = SlskdClient.create(config);
         this.pool = Executors.newWorkStealingPool();
-        this.scheduler = Executors.newScheduledThreadPool(1);
-//        // Repeatedly poll for current searches to avoid bombarding
-//        Runnable run = () -> {
-//            synchronized (searchStatesMu) {
-//                log.info("Running scheudled search state update");
-//                try {
-//                    allSearchStates = client.getAllSearchStates()
-//                            .stream()
-//                            .filter(r -> r.responses().size() > 0)
-//                            .collect(Collectors.toMap(
-//                                    SlskdSearchStateResponse::searchText,
-//                                    Function.identity(),
-//                                    (e1, e2) -> e1
-//                            ));
-//                } catch (Exception e) {
-//                    log.error("Error in scheduled refresh", e);
-//                }
-//                log.info("Scheduled search state update complete");
-//            }
-//        };
-//        run.run();
-//        scheduler.scheduleAtFixedRate(run, 15, 15, TimeUnit.SECONDS);
+        this.allSearchStates = client.getAllSearchStates()
+                .stream()
+                .collect(Collectors.toMap(
+                        s -> s.searchText(),
+                        Function.identity(),
+                        // Return the later of the two searches
+                        (o1, o2) -> o2
+                ));
+        System.out.println("initted slskd");
     }
 
     public CompletableFuture<List<SlskdSearchDetailResponse>> search(final AlbumInfo albumInfo) {
@@ -61,15 +47,12 @@ public class SlskdService {
 
         return CompletableFuture.supplyAsync(() -> {
             final SlskdSearchStateResponse initResp;
-
-            synchronized (searchStatesMu) {
-                if (allSearchStates.containsKey(searchString)) {
-                    initResp = allSearchStates.get(searchString);
-                    log.info("Found existing response for {}", searchString);
-                } else {
-                    log.info("Creating new search for {}", searchString);
-                    initResp = client.search(searchString);
-                }
+            if (allSearchStates.containsKey(searchString)) {
+                log.info("Found existing search for string {}", searchString);
+               initResp = allSearchStates.get(searchString);
+            } else {
+                log.info("Creating new search for {}", searchString);
+                initResp = client.search(searchString);
             }
 
             String state = initResp.state();
@@ -103,6 +86,15 @@ public class SlskdService {
         } catch (Exception e) {
             log.error("Error starting download request from user {} for {}", hostUser, files, e);
             return false;
+        }
+    }
+
+    public void shutdown() {
+        this.pool.shutdownNow();
+        try {
+            this.pool.awaitTermination(15000, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            log.error("Error terminating SlskdService worker pool", e);
         }
     }
 }
