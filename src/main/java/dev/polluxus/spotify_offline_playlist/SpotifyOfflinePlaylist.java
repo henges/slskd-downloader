@@ -1,15 +1,15 @@
 package dev.polluxus.spotify_offline_playlist;
 
 import au.com.muel.envconfig.EnvConfig;
+import dev.polluxus.spotify_offline_playlist.client.musicbrainz.MusicbrainzClient;
+import dev.polluxus.spotify_offline_playlist.client.musicbrainz.dto.MusicbrainzReleaseSearchResult;
 import dev.polluxus.spotify_offline_playlist.client.slskd.request.SlskdDownloadRequest;
-import dev.polluxus.spotify_offline_playlist.client.slskd.response.SlskdSearchDetailResponse;
 import dev.polluxus.spotify_offline_playlist.config.Config;
 import dev.polluxus.spotify_offline_playlist.model.AlbumInfo;
 import dev.polluxus.spotify_offline_playlist.model.Playlist;
 import dev.polluxus.spotify_offline_playlist.model.Playlist.PlaylistAlbum;
 import dev.polluxus.spotify_offline_playlist.model.Playlist.PlaylistSong;
 import dev.polluxus.spotify_offline_playlist.processor.matcher.MatchStrategyType;
-import dev.polluxus.spotify_offline_playlist.processor.model.ProcessorFileResult;
 import dev.polluxus.spotify_offline_playlist.processor.SlskdResponseProcessor;
 import dev.polluxus.spotify_offline_playlist.processor.model.ProcessorSearchResult;
 import dev.polluxus.spotify_offline_playlist.service.SlskdService;
@@ -20,8 +20,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 public class SpotifyOfflinePlaylist {
 
@@ -39,24 +39,64 @@ public class SpotifyOfflinePlaylist {
 
     public static void process(String playlistId, SpotifyService spotifyService, SlskdService slskdService) {
 
-        final Playlist p = spotifyService.getPlaylist(playlistId);
-        final List<PlaylistAlbum> distinctPlaylistAlbums = p.tracks().stream().map(PlaylistSong::playlistAlbum).distinct().toList();
-        final List<AlbumInfo> albumInfos = spotifyService.getAlbums(distinctPlaylistAlbums.stream().map(PlaylistAlbum::spotifyId).toList());
         final SlskdResponseProcessor processor = new SlskdResponseProcessor(MatchStrategyType.EDIT_DISTANCE);
         final DownloadConfirmer downloadConfirmer = new DownloadConfirmer(slskdService);
+        final Iterator<AlbumInfo> albumInfos = spotifyPlaylistSupplier(spotifyService, playlistId);
 
         processLoop(albumInfos, slskdService, processor, downloadConfirmer);
-
     }
 
-    public static void processLoop(List<AlbumInfo> albumInfos,
+    public static Iterator<AlbumInfo> spotifyPlaylistSupplier(final SpotifyService spotifyService, final String playlistId) {
+
+        final Playlist p = spotifyService.getPlaylist(playlistId);
+        final List<PlaylistAlbum> distinctPlaylistAlbums = p.tracks().stream().map(PlaylistSong::playlistAlbum).distinct().toList();
+        List<AlbumInfo> ais = spotifyService.getAlbums(distinctPlaylistAlbums.stream().map(PlaylistAlbum::spotifyId).toList());
+        return ais.iterator();
+    }
+
+    public static Iterator<AlbumInfo> musicbrainzFileSupplier(final MusicbrainzClient client, final List<Pair<String, String>> artistAlbumPairs) {
+
+        final Iterator<Pair<String, String>> artistAlbumPairIt = artistAlbumPairs.iterator();
+
+        return new Iterator<>() {
+
+            AlbumInfo next;
+
+            @Override
+            public boolean hasNext() {
+                if (!artistAlbumPairIt.hasNext()) {
+                    return false;
+                }
+                final Pair<String, String> currPair = artistAlbumPairIt.next();
+                MusicbrainzReleaseSearchResult r = client.searchReleases(currPair.getLeft(), currPair.getRight());
+                if (r.releases().size() == 0 && !artistAlbumPairIt.hasNext()) {
+                    return false;
+                }
+                final var bestMatch = r.releases().get(0);
+                final String artistName = bestMatch.artistCredit().get(0).artist().name();
+                final String albumName = bestMatch.title();
+                // TODO
+
+                return true;
+            }
+
+            @Override
+            public AlbumInfo next() {
+
+                return null;
+            }
+        };
+    }
+
+    public static void processLoop(Iterator<AlbumInfo> albumInfos,
                                    SlskdService service,
                                    SlskdResponseProcessor processor,
                                    Function<ProcessorSearchResult, CompletableFuture<Void>> consumer) {
 
         List<CompletableFuture<ProcessorSearchResult>> requestsInFlight = new ArrayList<>();
         final List<CompletableFuture<Void>> allRequests = new ArrayList<>();
-        for (var ai : albumInfos) {
+        while (albumInfos.hasNext()) {
+            final AlbumInfo ai = albumInfos.next();
             if (requestsInFlight.size() >= 5) {
                 CompletableFuture.allOf(requestsInFlight.toArray(CompletableFuture[]::new)).join();
                 requestsInFlight = new ArrayList<>();

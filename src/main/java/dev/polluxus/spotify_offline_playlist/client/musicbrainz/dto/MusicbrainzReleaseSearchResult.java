@@ -2,7 +2,9 @@ package dev.polluxus.spotify_offline_playlist.client.musicbrainz.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * See <a href="https://musicbrainz.org/doc/MusicBrainz_API/Search#Release">docs</a>
@@ -15,11 +17,11 @@ public record MusicbrainzReleaseSearchResult(
 ) {
 
     public record MusicbrainzRelease(
-            String id,
+            UUID id,
             String title,
             String disambiguation,
-            @JsonProperty("artist-credit") MusicbrainzArtistCredit artistCredit,
-            String date,
+            @JsonProperty("artist-credit") List<MusicbrainzArtistCredit> artistCredit,
+            LocalDate date,
             @JsonProperty("track-count") int trackCount
     ) { }
 

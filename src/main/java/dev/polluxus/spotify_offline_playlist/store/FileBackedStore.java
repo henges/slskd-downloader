@@ -26,7 +26,7 @@ public class FileBackedStore<T> implements Store<T> {
 
     public static <T> FileBackedStore<T> from(final Config config, final Class<T> klazz) {
 
-        final File f = Path.of(config.dataDirectory()).toFile();
+        final File f = Path.of(config.dataDirectory(), klazz.getSimpleName()).toFile();
         f.mkdirs();
         final ObjectMapper mapper = JacksonConfig.MAPPER;
         return new FileBackedStore<>(f, mapper, klazz);
