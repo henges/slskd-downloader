@@ -1,7 +1,7 @@
 package dev.polluxus.spotify_offline_playlist.client;
 
 import com.google.common.collect.Lists;
-import dev.polluxus.spotify_offline_playlist.Config;
+import dev.polluxus.spotify_offline_playlist.config.Config;
 import dev.polluxus.spotify_offline_playlist.model.AlbumInfo;
 import se.michaelthelin.spotify.SpotifyApi;
 import se.michaelthelin.spotify.model_objects.credentials.ClientCredentials;

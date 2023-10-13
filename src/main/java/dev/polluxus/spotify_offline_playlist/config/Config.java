@@ -1,4 +1,4 @@
-package dev.polluxus.spotify_offline_playlist;
+package dev.polluxus.spotify_offline_playlist.config;
 
 import au.com.muel.envconfig.EnvVar;
 

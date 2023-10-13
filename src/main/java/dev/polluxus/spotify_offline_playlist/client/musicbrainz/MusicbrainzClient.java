@@ -2,8 +2,9 @@ package dev.polluxus.spotify_offline_playlist.client.musicbrainz;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.polluxus.spotify_offline_playlist.Config;
+import dev.polluxus.spotify_offline_playlist.config.Config;
 import dev.polluxus.spotify_offline_playlist.client.musicbrainz.dto.MusicbrainzReleaseSearchResult;
+import dev.polluxus.spotify_offline_playlist.config.JacksonConfig;
 import dev.polluxus.spotify_offline_playlist.store.FileBackedStore;
 import org.apache.hc.client5.http.classic.HttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
@@ -40,7 +41,7 @@ public class MusicbrainzClient {
     public static MusicbrainzClient create(Config config) {
         final HttpClient client = HttpClientBuilder.create().build();
         final FileBackedStore<MusicbrainzReleaseSearchResult> store = FileBackedStore.from(config, MusicbrainzReleaseSearchResult.class);
-        final ObjectMapper mapper = new ObjectMapper().disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+        final ObjectMapper mapper = JacksonConfig.MAPPER;
         return new MusicbrainzClient(client, store, mapper);
     }
 

@@ -1,6 +1,6 @@
 package dev.polluxus.spotify_offline_playlist.service;
 
-import dev.polluxus.spotify_offline_playlist.Config;
+import dev.polluxus.spotify_offline_playlist.config.Config;
 import dev.polluxus.spotify_offline_playlist.client.SpotifyClient;
 import dev.polluxus.spotify_offline_playlist.model.AlbumInfo;
 import dev.polluxus.spotify_offline_playlist.model.Playlist;

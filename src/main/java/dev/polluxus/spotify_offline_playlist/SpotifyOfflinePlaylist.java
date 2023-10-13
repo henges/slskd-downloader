@@ -3,10 +3,12 @@ package dev.polluxus.spotify_offline_playlist;
 import au.com.muel.envconfig.EnvConfig;
 import dev.polluxus.spotify_offline_playlist.client.slskd.request.SlskdDownloadRequest;
 import dev.polluxus.spotify_offline_playlist.client.slskd.response.SlskdSearchDetailResponse;
+import dev.polluxus.spotify_offline_playlist.config.Config;
 import dev.polluxus.spotify_offline_playlist.model.AlbumInfo;
 import dev.polluxus.spotify_offline_playlist.model.Playlist;
 import dev.polluxus.spotify_offline_playlist.model.Playlist.PlaylistAlbum;
 import dev.polluxus.spotify_offline_playlist.model.Playlist.PlaylistSong;
+import dev.polluxus.spotify_offline_playlist.processor.matcher.MatchStrategyType;
 import dev.polluxus.spotify_offline_playlist.processor.model.ProcessorFileResult;
 import dev.polluxus.spotify_offline_playlist.processor.SlskdResponseProcessor;
 import dev.polluxus.spotify_offline_playlist.service.SlskdService;
@@ -37,6 +39,7 @@ public class SpotifyOfflinePlaylist {
         final Playlist p = spotifyService.getPlaylist(playlistId);
         final List<PlaylistAlbum> distinctPlaylistAlbums = p.tracks().stream().map(PlaylistSong::playlistAlbum).distinct().toList();
         final List<AlbumInfo> albumInfos = spotifyService.getAlbums(distinctPlaylistAlbums.stream().map(PlaylistAlbum::spotifyId).toList());
+        final SlskdResponseProcessor processor = new SlskdResponseProcessor(MatchStrategyType.EDIT_DISTANCE);
 
         DownloadConfirmer downloadConfirmer = new DownloadConfirmer(slskdService);
 
@@ -48,7 +51,7 @@ public class SpotifyOfflinePlaylist {
                 requestsInFlight = new ArrayList<>();
             }
             final var future = slskdService.search(ai)
-                    .thenApply(l -> SlskdResponseProcessor.process(l, ai))
+                    .thenApply(l -> processor.process(l, ai))
 //                    .whenComplete((l, t) -> downloadConfirmer.accept(ai.name() + " " + String.join(", ", ai.artists()), l))
                     ;
             try {

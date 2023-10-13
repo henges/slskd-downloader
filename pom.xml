@@ -63,14 +63,20 @@
       <version>3.4.1</version>
     </dependency>
     <dependency>
-      <groupId>io.soabase.record-builder</groupId>
-      <artifactId>record-builder-processor</artifactId>
-      <version>37</version>
-    </dependency>
-    <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-text</artifactId>
       <version>1.10.0</version>
+    </dependency>
+    <dependency>
+      <groupId>commons-io</groupId>
+      <artifactId>commons-io</artifactId>
+      <version>2.11.0</version>
+    </dependency>
+    <dependency>
+      <groupId>io.soabase.record-builder</groupId>
+      <artifactId>record-builder-processor</artifactId>
+      <version>37</version>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>junit</groupId>
@@ -85,11 +91,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <configuration>
-          <compilerArgs>
-            <arg>-AprefixEnclosingClassNames=false</arg>
-          </compilerArgs>
-        </configuration>
+        <version>3.11.0</version>
       </plugin>
     </plugins>
   </build>

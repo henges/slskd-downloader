@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
 public class PatternMatchStrategy implements MatchStrategy {
 
     @Override
-    public Map<String, List<ProcessorFileResult>> apply(SlskdSearchDetailResponse resp, AlbumInfo albumInfo) {
+    public Map<String, List<ProcessorFileResultBuilder>> apply(SlskdSearchDetailResponse resp, AlbumInfo albumInfo) {
 
         // TODO: We need to distance match here. Otherwise we will miss tracks
         //  because of small typos in track names (on either sender or receiver side).
@@ -28,21 +28,16 @@ public class PatternMatchStrategy implements MatchStrategy {
         // Generally the number of files in a given response will be as large as
         // or larger than the number of tracks in the request, so this is a good
         // choice, but you could also iterate according to whichever one was smaller.
-        Map<String, List<ProcessorFileResult>> matchesForPattern = new HashMap<>(patterns.size());
+        Map<String, List<ProcessorFileResultBuilder>> matchesForPattern = new HashMap<>(patterns.size());
         for (SlskdSearchMatchResponse currentResult : resp.files()) {
             for (Pattern currentTarget : patterns) {
                 if (currentTarget.matcher(currentResult.filename()).find()) {
 
                     var pr = ProcessorFileResultBuilder.builder()
-                            .filename(currentResult.filename())
+                            .originalData(currentResult)
                             .matchDetails(ProcessorMatchDetailsBuilder.builder()
                                     .matchesTitle(currentTarget.toString())
-                                    .build())
-                            .isTargetFormat(FILE_FORMAT_PATTERN.matcher(currentResult.filename()).find())
-                            // Almost all audio files will be at least 500kb and this helps
-                            // filter out e.g. tiny metadata files that contain the song name
-                            .sizeOk(currentResult.size() > 500_000)
-                            .build();
+                                    .build());
                     matchesForPattern.computeIfAbsent(currentTarget.toString(), (k) -> new ArrayList<>()).add(pr);
                 }
             }

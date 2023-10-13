@@ -1,88 +1,83 @@
 package dev.polluxus.spotify_offline_playlist.processor;
 
 import dev.polluxus.spotify_offline_playlist.client.slskd.response.SlskdSearchDetailResponse;
-import dev.polluxus.spotify_offline_playlist.client.slskd.response.SlskdSearchDetailResponse.SlskdSearchMatchResponse;
 import dev.polluxus.spotify_offline_playlist.model.AlbumInfo;
 import dev.polluxus.spotify_offline_playlist.processor.matcher.MatchStrategyType;
 import dev.polluxus.spotify_offline_playlist.processor.model.ProcessorFileResult;
+import dev.polluxus.spotify_offline_playlist.processor.model.ProcessorFileResultBuilder;
 import dev.polluxus.spotify_offline_playlist.processor.model.ProcessorSearchResult;
 import dev.polluxus.spotify_offline_playlist.processor.model.ProcessorUserResultBuilder;
-import dev.polluxus.spotify_offline_playlist.util.TriFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
-import java.util.function.BiFunction;
-import java.util.regex.Pattern;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+
+import static dev.polluxus.spotify_offline_playlist.processor.matcher.MatchStrategy.FILE_FORMAT_PATTERN;
 
 public class SlskdResponseProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(SlskdResponseProcessor.class);
 
-    public static ProcessorSearchResult process(List<SlskdSearchDetailResponse> resps, AlbumInfo albumInfo) {
+    private final MatchStrategyType matchStrategy;
+
+    public SlskdResponseProcessor(MatchStrategyType matchStrategy) {
+        this.matchStrategy = matchStrategy;
+    }
+
+    public ProcessorSearchResult process(List<SlskdSearchDetailResponse> resps, AlbumInfo albumInfo) {
 
         return new ProcessorSearchResult(albumInfo, resps.stream()
-                .map(r -> findMatches(r, albumInfo).build())
+                .map(r -> findMatches(r, albumInfo))
+                .map(this::computeBestFiles)
+                .map(ProcessorUserResultBuilder::build)
+                .filter(ur -> !ur.byTrackName().isEmpty())
                 .toList());
     }
 
-    private static ProcessorUserResultBuilder findMatches(SlskdSearchDetailResponse resp, AlbumInfo albumInfo) {
+    private ProcessorUserResultBuilder findMatches(SlskdSearchDetailResponse resp, AlbumInfo albumInfo) {
 
-        Map<String, List<ProcessorFileResult>> matches = MatchStrategyType.PATTERN_MATCH.match(resp, albumInfo);
+        final Map<String, List<ProcessorFileResultBuilder>> matches = MatchStrategyType.EDIT_DISTANCE.match(resp, albumInfo);
+        matches.values().stream().flatMap(Collection::stream)
+                .forEach(a -> a
+                        .isTargetFormat(FILE_FORMAT_PATTERN.matcher(a.originalData().filename()).find())
+                        // Almost all audio files will be at least 500kb and this helps
+                        // filter out e.g. tiny metadata files that contain the song name
+                        .sizeOk(a.originalData().size() > 500_000)
+                );
 
-        final List<ProcessorFileResult> matchingFiles = matches.values().stream()
-                .flatMap(Collection::stream)
-                .toList();
-        final float matchedPercent = (float) matches.keySet().size() / albumInfo.tracks().size();
+//        final float matchedPercent = (float) matches.keySet().size() / albumInfo.tracks().size();
 
         return ProcessorUserResultBuilder.builder()
                 .username(resp.username())
-                .files(matchingFiles);
+                .byTrackName(matches);
     }
 
-    @Deprecated
-    public static class Heuristics {
+    private ProcessorUserResultBuilder computeBestFiles(ProcessorUserResultBuilder builder) {
 
-        public static int score(SlskdSearchDetailResponse result, List<String> targetTrackNames) {
+        for (var e : builder.byTrackName().entrySet()) {
+            
+            e.getValue().stream().map(f -> {
+                scoreMatches(f);
 
-            boolean hasRightFormat = Heuristics.hasRightFormatAndLength.apply(result, "flac", targetTrackNames.size());
-            boolean hasRightBitrate = Heuristics.hasRightBitrate.apply(result, 224, "GE");
-            boolean hasAllTracks = Heuristics.hasAllTracks.apply(result, targetTrackNames);
-
-            return (hasAllTracks ? 5 : 0) + (hasRightFormat ? 3 : 0)
-                    + (hasRightBitrate ? 1 : 0)
-                    ;
+                
+            });
         }
+        
 
-        static TriFunction<SlskdSearchDetailResponse, String, Integer, Boolean> hasRightFormatAndLength = (res, fmt, len) -> {
+        return builder;
+    }
 
-            Pattern fmtPattern = Pattern.compile("\\." + fmt, Pattern.CASE_INSENSITIVE);
-            return res.files().stream()
-                    .filter(t -> fmtPattern.matcher(t.filename()).find())
-                    .toList().size() >= len;
-        };
+    private static final int SIZE_POINTS = 20;
+    private static final int FORMAT_POINTS = 50;
+    private static final int AVAILABLE_POINTS = SIZE_POINTS + FORMAT_POINTS;
 
-        static TriFunction<SlskdSearchDetailResponse, Integer, String, Boolean> hasRightBitrate = (res, bitrate, op) -> {
+    private void scoreMatches(ProcessorFileResultBuilder builder) {
+        
+        final int sizePoints = builder.sizeOk() ? SIZE_POINTS : 0;
+        final int formatPoints = builder.isTargetFormat() ? FORMAT_POINTS : 0;
 
-            List <Integer> bitrates = res.files().stream()
-                    .filter(f -> f.bitRate().isPresent())
-                    .map(f -> f.bitRate().get()).toList();
-            if (bitrates.isEmpty()) {
-                return false;
-            }
-            return bitrates.stream().mapToInt(i -> i).sum() / bitrates.size() >= bitrate;
-        };
-
-        static BiFunction<SlskdSearchDetailResponse, List<String>, Boolean> hasAllTracks = (res, tgt) -> {
-
-            final List<Pattern> patterns = tgt.stream()
-                    .map(n -> Pattern.compile(n, Pattern.CASE_INSENSITIVE))
-                    .toList();
-
-            return res.files().stream().map(SlskdSearchMatchResponse::filename)
-                    .allMatch(track -> patterns.stream()
-                            .anyMatch(p -> p.matcher(track).find()));
-        };
-
+        builder.score((float) (sizePoints + formatPoints) / AVAILABLE_POINTS);
     }
 }

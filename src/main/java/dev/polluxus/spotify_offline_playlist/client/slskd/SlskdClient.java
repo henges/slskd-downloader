@@ -1,12 +1,11 @@
 package dev.polluxus.spotify_offline_playlist.client.slskd;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.google.common.collect.Lists;
-import dev.polluxus.spotify_offline_playlist.Config;
+import dev.polluxus.spotify_offline_playlist.config.Config;
 import dev.polluxus.spotify_offline_playlist.client.AbstractHttpClient;
 import dev.polluxus.spotify_offline_playlist.client.slskd.request.SlskdDownloadRequest;
 import dev.polluxus.spotify_offline_playlist.client.slskd.request.SlskdLoginRequest;
@@ -14,19 +13,14 @@ import dev.polluxus.spotify_offline_playlist.client.slskd.request.SlskdSearchReq
 import dev.polluxus.spotify_offline_playlist.client.slskd.response.SlskdLoginResponse;
 import dev.polluxus.spotify_offline_playlist.client.slskd.response.SlskdSearchDetailResponse;
 import dev.polluxus.spotify_offline_playlist.client.slskd.response.SlskdSearchStateResponse;
+import dev.polluxus.spotify_offline_playlist.config.JacksonConfig;
 import org.apache.hc.client5.http.classic.HttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
-import org.apache.hc.core5.http.ClassicHttpRequest;
 import org.apache.hc.core5.http.ContentType;
-import org.apache.hc.core5.http.io.HttpClientResponseHandler;
 import org.apache.hc.core5.http.io.support.ClassicRequestBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -120,9 +114,7 @@ public class SlskdClient extends AbstractHttpClient {
     public static SlskdClient create(Config config) {
 
         final HttpClient client = HttpClientBuilder.create().build();
-        final ObjectMapper mapper = new ObjectMapper()
-                .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-                .registerModule(new Jdk8Module())
+        final ObjectMapper mapper = JacksonConfig.MAPPER
                 ;
         final SlskdClient ret = new SlskdClient(
                 config.slskdBaseUrl(), config.slskdUsername(), config.slskdPassword(), client, mapper);

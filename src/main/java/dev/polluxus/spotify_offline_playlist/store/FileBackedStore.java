@@ -1,7 +1,8 @@
 package dev.polluxus.spotify_offline_playlist.store;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.polluxus.spotify_offline_playlist.Config;
+import dev.polluxus.spotify_offline_playlist.config.Config;
+import dev.polluxus.spotify_offline_playlist.config.JacksonConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,7 +28,7 @@ public class FileBackedStore<T> implements Store<T> {
 
         final File f = Path.of(config.dataDirectory()).toFile();
         f.mkdirs();
-        final ObjectMapper mapper = new ObjectMapper();
+        final ObjectMapper mapper = JacksonConfig.MAPPER;
         return new FileBackedStore<>(f, mapper, klazz);
     }
 

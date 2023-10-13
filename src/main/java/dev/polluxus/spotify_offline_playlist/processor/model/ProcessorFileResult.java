@@ -1,18 +1,21 @@
 package dev.polluxus.spotify_offline_playlist.processor.model;
 
+import dev.polluxus.spotify_offline_playlist.client.slskd.response.SlskdSearchDetailResponse.SlskdSearchMatchResponse;
+import dev.polluxus.spotify_offline_playlist.config.Builder;
 import io.soabase.recordbuilder.core.RecordBuilder;
 
 import javax.annotation.Nullable;
 
-@RecordBuilder
+@Builder
 public record ProcessorFileResult(
-        String filename,
+        double score,
+        SlskdSearchMatchResponse originalData,
         ProcessorMatchDetails matchDetails,
         boolean isTargetFormat,
         boolean sizeOk
 ) {
 
-    @RecordBuilder
+    @Builder
     public record ProcessorMatchDetails(
             String matchesTitle,
             // Only for Levenshtein
