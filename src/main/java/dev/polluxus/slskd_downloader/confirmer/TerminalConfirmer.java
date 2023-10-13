@@ -37,7 +37,7 @@ public class TerminalConfirmer implements DownloadConfirmer {
         }
         console.printf("(%d tracks total)\n\n", res.bestCandidates().size());
 
-        console.println("OK? [y/n/skip]");
+        console.println("OK? [y/n/[s]kip]");
         String response;
         do {
             response = console.read();
@@ -48,12 +48,18 @@ public class TerminalConfirmer implements DownloadConfirmer {
                 case "n" -> {
                     return UserConfirmationResult.NO;
                 }
-                case "skip" -> {
+                case "skip", "s" -> {
                     return UserConfirmationResult.SKIP;
                 }
                 default -> console.println("Invalid response");
             }
         } while (true);
+    }
+
+    @Override
+    public void informSuccess(AlbumInfo ai, String username) {
+
+        console.printf("Successfully initiated download for %s from %s\n", ai.searchString(), username);
     }
 
     public void informFailure(AlbumInfo ai, String username) {

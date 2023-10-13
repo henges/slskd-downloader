@@ -52,7 +52,7 @@ public class SlskdDownloader {
     public static void process(final Iterator<AlbumInfo> supplier, SlskdService slskdService) {
 
         final SlskdResponseProcessor processor = new SlskdResponseProcessor(MatchStrategyType.EDIT_DISTANCE);
-        final DownloadProcessor downloadProcessor = DownloadProcessor.start(slskdService);
+        final DownloadProcessor downloadProcessor = new DownloadProcessor(slskdService);
 
         processLoop(supplier, slskdService, processor, downloadProcessor);
         downloadProcessor.stop();
