@@ -40,7 +40,7 @@ public class EditDistanceStrategy implements MatchStrategy {
             final String sanitisedFileName = sanitiseFilename(originalFilename, albumInfo);
 
             for (String currentTarget : albumInfo.tracks()) {
-                final int distance = LEVENSHTEIN_DISTANCE.apply(currentTarget, sanitisedFileName);
+                final int distance = LEVENSHTEIN_DISTANCE.apply(currentTarget.toLowerCase(), sanitisedFileName.toLowerCase());
                 if (distance != -1) {
 
                     var pr = ProcessorFileResultBuilder.builder()
