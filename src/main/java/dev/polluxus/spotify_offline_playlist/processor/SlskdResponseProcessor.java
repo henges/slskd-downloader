@@ -70,15 +70,24 @@ public class SlskdResponseProcessor {
 
     private ProcessorUserResultBuilder computeBestFiles(ProcessorUserResultBuilder builder) {
 
-        final List<ProcessorFileResult> prfs = builder.byTrackName().values().stream()
+        final List<List<ProcessorFileResult>> prfs = builder.byTrackName().values().stream()
                 // Score the matches and return any one of the highest scoring matches
-                .map(pfrb -> pfrb.stream().map(this::scoreMatches).max(Comparator.comparing(ProcessorFileResultBuilder::score)))
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .map(ProcessorFileResultBuilder::build)
+                .map(pfrb -> pfrb.stream().map(this::scoreMatches).map(ProcessorFileResultBuilder::build).sorted(Comparator.comparing(ProcessorFileResult::score, Comparator.reverseOrder())).toList())
                 .toList();
+        final Map<String, ProcessorFileResult> uniques = new HashMap<>();
+        for (var res : prfs) {
+            for (var entry : res) {
+                final String key = entry.originalData().filename();
+                // Skip entries that matched more than one name
+                if (uniques.containsKey(key)) {
+                    continue;
+                }
+                uniques.put(key, entry);
+                break;
+            }
+        }
 
-        builder.bestCandidates(prfs);
+        builder.bestCandidates(uniques.values().stream().toList());
 
         return builder;
     }
