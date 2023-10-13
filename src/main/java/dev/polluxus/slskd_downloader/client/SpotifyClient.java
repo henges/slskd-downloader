@@ -20,8 +20,8 @@ public class SpotifyClient {
 
     private SpotifyClient(final Config config) {
         this.spotify = SpotifyApi.builder()
-                .setClientId(config.spotifyClientId())
-                .setClientSecret(config.spotifyClientSecret())
+                .setClientId(config.spotifyClientId().orElseThrow())
+                .setClientSecret(config.spotifyClientSecret().orElseThrow())
                 .build();
     }
 

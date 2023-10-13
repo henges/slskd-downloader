@@ -20,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public class SlskdClient extends AbstractHttpClient {
@@ -50,17 +51,17 @@ public class SlskdClient extends AbstractHttpClient {
     public static void main(String[] args) throws InterruptedException {
         final var c = create(new Config() {
             @Override
-            public String spotifyClientId() {
+            public Optional<String> spotifyClientId() {
                 return null;
             }
 
             @Override
-            public String spotifyClientSecret() {
+            public Optional<String> spotifyClientSecret() {
                 return null;
             }
 
             @Override
-            public String spotifyPlaylistId() {
+            public Optional<String> spotifyPlaylistId() {
                 return null;
             }
 
@@ -70,7 +71,7 @@ public class SlskdClient extends AbstractHttpClient {
             }
 
             @Override
-            public String fileSource() {
+            public Optional<String> fileSource() {
                 return null;
             }
 

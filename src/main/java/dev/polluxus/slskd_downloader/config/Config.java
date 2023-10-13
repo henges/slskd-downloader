@@ -2,21 +2,23 @@ package dev.polluxus.slskd_downloader.config;
 
 import au.com.muel.envconfig.EnvVar;
 
-public interface Config {
+import java.util.Optional;
 
-    String spotifyClientId();
-    String spotifyClientSecret();
-    String spotifyPlaylistId();
+public interface Config {
 
     @EnvVar(defaultValue = "~/.spotify_offline_playlist")
     String dataDirectory();
-    String fileSource();
-
     String slskdBaseUrl();
     @EnvVar(defaultValue = "slskd")
     String slskdUsername();
     @EnvVar(defaultValue = "slskd")
     String slskdPassword();
+
+    Optional<String> spotifyClientId();
+    Optional<String> spotifyClientSecret();
+    Optional<String> spotifyPlaylistId();
+
+    Optional<String> fileSource();
 
 
 }

@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Comparator;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 
@@ -52,17 +53,17 @@ public class MusicbrainzClient {
 
         Config config = new Config() {
             @Override
-            public String spotifyClientId() {
+            public Optional<String> spotifyClientId() {
                 return null;
             }
 
             @Override
-            public String spotifyClientSecret() {
+            public Optional<String> spotifyClientSecret() {
                 return null;
             }
 
             @Override
-            public String spotifyPlaylistId() {
+            public Optional<String> spotifyPlaylistId() {
                 return null;
             }
 
@@ -72,7 +73,7 @@ public class MusicbrainzClient {
             }
 
             @Override
-            public String fileSource() {
+            public Optional<String> fileSource() {
                 return null;
             }
 

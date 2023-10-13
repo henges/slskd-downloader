@@ -1,5 +1,7 @@
 package dev.polluxus.slskd_downloader.service;
 
+import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import dev.polluxus.slskd_downloader.config.Config;
 import dev.polluxus.slskd_downloader.client.slskd.SlskdClient;
 import dev.polluxus.slskd_downloader.client.slskd.request.SlskdDownloadRequest;
@@ -21,8 +23,7 @@ public class SlskdService {
 
     private final SlskdClient client;
     private final ExecutorService pool;
-    private Map<String, SlskdSearchStateResponse> allSearchStates;
-
+    private final Map<String, SlskdSearchStateResponse> allSearchStates;
 
     public SlskdService(Config config) {
         this.client = SlskdClient.create(config);
@@ -30,12 +31,12 @@ public class SlskdService {
         this.allSearchStates = client.getAllSearchStates()
                 .stream()
                 .collect(Collectors.toMap(
-                        s -> s.searchText(),
+                        SlskdSearchStateResponse::searchText,
                         Function.identity(),
-                        // Return the later of the two searches
+                        // Searches are returned earliest -> latest, so use the freshest
+                        // result only
                         (o1, o2) -> o2
                 ));
-        System.out.println("initted slskd");
     }
 
     public CompletableFuture<List<SlskdSearchDetailResponse>> search(final AlbumInfo albumInfo) {
@@ -49,7 +50,7 @@ public class SlskdService {
             final SlskdSearchStateResponse initResp;
             if (allSearchStates.containsKey(searchString)) {
                 log.info("Found existing search for string {}", searchString);
-               initResp = allSearchStates.get(searchString);
+                initResp = allSearchStates.get(searchString);
             } else {
                 log.info("Creating new search for {}", searchString);
                 initResp = client.search(searchString);
@@ -71,11 +72,11 @@ public class SlskdService {
             log.info("Got {} responses for query {}", responses.size(), searchString);
 
             return responses;
-            }, this.pool)
-            .exceptionally(t -> {
-                log.error("Exception while retrieving search for {}", searchString, t);
-                return List.of();
-            });
+        }, this.pool)
+        .exceptionally(t -> {
+            log.error("Exception while retrieving search for {}", searchString, t);
+            return List.of();
+        });
     }
 
     public boolean initiateDownloads(final String hostUser, final List<SlskdDownloadRequest> files) {
