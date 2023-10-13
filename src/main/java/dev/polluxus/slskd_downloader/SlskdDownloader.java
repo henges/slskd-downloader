@@ -16,6 +16,7 @@ import dev.polluxus.slskd_downloader.model.AlbumInfo;
 import dev.polluxus.slskd_downloader.model.Playlist;
 import dev.polluxus.slskd_downloader.model.Playlist.PlaylistAlbum;
 import dev.polluxus.slskd_downloader.model.Playlist.PlaylistSong;
+import dev.polluxus.slskd_downloader.processor.DownloadProcessor.DownloadResult;
 import dev.polluxus.slskd_downloader.processor.matcher.MatchStrategyType;
 import dev.polluxus.slskd_downloader.processor.SlskdResponseProcessor;
 import dev.polluxus.slskd_downloader.processor.model.ProcessorSearchResult;
@@ -29,6 +30,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class SlskdDownloader {
 
@@ -123,10 +125,10 @@ public class SlskdDownloader {
     public static void processLoop(Iterator<AlbumInfo> albumInfos,
                                    SlskdService service,
                                    SlskdResponseProcessor processor,
-                                   Function<ProcessorSearchResult, CompletableFuture<Void>> consumer) {
+                                   Function<ProcessorSearchResult, CompletableFuture<DownloadResult>> consumer) {
 
         List<CompletableFuture<ProcessorSearchResult>> requestsInFlight = new ArrayList<>();
-        final List<CompletableFuture<Void>> allRequests = new ArrayList<>();
+        final Map<AlbumInfo, CompletableFuture<DownloadResult>> allRequests = new HashMap<>();
         while (albumInfos.hasNext()) {
             final AlbumInfo ai = albumInfos.next();
             if (requestsInFlight.size() >= 5) {
@@ -143,9 +145,38 @@ public class SlskdDownloader {
                 throw new RuntimeException(e);
             }
             requestsInFlight.add(processFuture);
-            allRequests.add(doneFuture);
+            allRequests.put(ai, doneFuture);
         }
-        CompletableFuture.allOf(allRequests.toArray(CompletableFuture[]::new)).join();
+        CompletableFuture.allOf(allRequests.values().toArray(CompletableFuture[]::new)).join();
         log.info("All requests done.");
+        Map<DownloadResult, List<AlbumInfo>> failures = allRequests.entrySet().stream()
+                .filter(e -> !e.getValue().join().equals(DownloadResult.OK))
+                .collect(Collectors.toMap(
+                        e -> e.getValue().join(),
+                        e -> {
+                            List<AlbumInfo> r = new ArrayList<>();
+                            r.add(e.getKey());
+                            return r;
+                        },
+                        (e1, e2) -> {
+                            e1.addAll(e2);
+                            return e1;
+                        }
+                ));
+        final List<AlbumInfo> triedAndFailed = failures.getOrDefault(DownloadResult.TRIED_FAILED, List.of());
+        final List<AlbumInfo> didntTry = failures.getOrDefault(DownloadResult.DIDNT_TRY, List.of());
+        final List<AlbumInfo> explicitlySkipped = failures.getOrDefault(DownloadResult.EXPLICITLY_SKIPPED, List.of());
+        if (!triedAndFailed.isEmpty()) {
+            log.info("The following searches were attempted, but failed to download correctly:");
+            triedAndFailed.forEach(ai -> log.info("\t{}", ai.searchString()));
+        }
+        if (!didntTry.isEmpty()) {
+            log.info("The following searches either had no results or had all results rejected:");
+            didntTry.forEach(ai -> log.info("\t{}", ai.searchString()));
+        }
+        if (!explicitlySkipped.isEmpty()) {
+            log.info("The following searches were explicitly skipped:");
+            explicitlySkipped.forEach(ai -> log.info("\t{}", ai.searchString()));
+        }
     }
 }

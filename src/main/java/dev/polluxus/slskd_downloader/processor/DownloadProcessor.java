@@ -3,6 +3,7 @@ package dev.polluxus.slskd_downloader.processor;
 import dev.polluxus.slskd_downloader.client.slskd.request.SlskdDownloadRequest;
 import dev.polluxus.slskd_downloader.confirmer.TerminalConfirmer;
 import dev.polluxus.slskd_downloader.model.AlbumInfo;
+import dev.polluxus.slskd_downloader.processor.DownloadProcessor.DownloadResult;
 import dev.polluxus.slskd_downloader.processor.model.ProcessorSearchResult;
 import dev.polluxus.slskd_downloader.processor.model.ProcessorUserResult;
 import dev.polluxus.slskd_downloader.service.SlskdService;
@@ -13,9 +14,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
-public class DownloadProcessor implements Function<ProcessorSearchResult, CompletableFuture<Void>> {
+public class DownloadProcessor implements Function<ProcessorSearchResult, CompletableFuture<DownloadResult>> {
 
     public interface DownloadConfirmer {
         UserConfirmationResult confirm(final AlbumInfo albumInfo, final ProcessorUserResult res);
@@ -53,7 +56,16 @@ public class DownloadProcessor implements Function<ProcessorSearchResult, Comple
         SKIP
     }
 
-    public CompletableFuture<Void> apply(ProcessorSearchResult res) {
+    public enum DownloadResult {
+        OK,
+        TRIED_FAILED,
+        EXPLICITLY_SKIPPED,
+        DIDNT_TRY
+    }
+
+    public CompletableFuture<DownloadResult> apply(ProcessorSearchResult res) {
+
+        AtomicReference<DownloadResult> downloadResult = new AtomicReference<>(DownloadResult.DIDNT_TRY);
 
         return CompletableFuture.runAsync(() -> {
 
@@ -68,6 +80,7 @@ public class DownloadProcessor implements Function<ProcessorSearchResult, Comple
                         continue;
                     }
                     case SKIP -> {
+                        downloadResult.set(DownloadResult.EXPLICITLY_SKIPPED);
                         break resultsLoop;
                     }
                     case YES -> {
@@ -76,14 +89,17 @@ public class DownloadProcessor implements Function<ProcessorSearchResult, Comple
                                 .toList());
 
                         if (ok) {
+                            downloadResult.set(DownloadResult.OK);
                             confirmer.informSuccess(res.albumInfo(), e.username());
                             break resultsLoop;
                         } else {
+                            downloadResult.set(DownloadResult.TRIED_FAILED);
                             confirmer.informFailure(res.albumInfo(), e.username());
                         }
                     }
                 }
             }
-        }, executor);
+        }, executor)
+        .thenApply(__ -> downloadResult.get());
     }
 }
