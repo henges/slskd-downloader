@@ -54,7 +54,7 @@ public class SlskdService {
 
     public CompletableFuture<List<SlskdSearchDetailResponse>> search(final AlbumInfo albumInfo) {
 
-        return search(albumInfo.name() + " " + String.join(" ", albumInfo.artists()));
+        return search(albumInfo.searchString());
     }
 
     public CompletableFuture<List<SlskdSearchDetailResponse>> search(final String searchString) {

@@ -9,4 +9,9 @@ public record AlbumInfo(
         List<String> tracks,
         List<String> artists
 ) {
+
+    public String searchString() {
+
+        return String.join(" ", artists) + " " + name;
+    }
 }

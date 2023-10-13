@@ -11,6 +11,7 @@ import dev.polluxus.spotify_offline_playlist.model.Playlist.PlaylistSong;
 import dev.polluxus.spotify_offline_playlist.processor.matcher.MatchStrategyType;
 import dev.polluxus.spotify_offline_playlist.processor.model.ProcessorFileResult;
 import dev.polluxus.spotify_offline_playlist.processor.SlskdResponseProcessor;
+import dev.polluxus.spotify_offline_playlist.processor.model.ProcessorSearchResult;
 import dev.polluxus.spotify_offline_playlist.service.SlskdService;
 import dev.polluxus.spotify_offline_playlist.service.SpotifyService;
 import org.apache.commons.lang3.tuple.Pair;
@@ -19,6 +20,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.function.Consumer;
 
 public class SpotifyOfflinePlaylist {
 
@@ -40,34 +42,38 @@ public class SpotifyOfflinePlaylist {
         final List<PlaylistAlbum> distinctPlaylistAlbums = p.tracks().stream().map(PlaylistSong::playlistAlbum).distinct().toList();
         final List<AlbumInfo> albumInfos = spotifyService.getAlbums(distinctPlaylistAlbums.stream().map(PlaylistAlbum::spotifyId).toList());
         final SlskdResponseProcessor processor = new SlskdResponseProcessor(MatchStrategyType.EDIT_DISTANCE);
+        final DownloadConfirmer downloadConfirmer = new DownloadConfirmer(slskdService);
 
-        DownloadConfirmer downloadConfirmer = new DownloadConfirmer(slskdService);
+        processLoop(albumInfos, slskdService, processor, downloadConfirmer);
 
-        List<CompletableFuture<Map<String, List<ProcessorFileResult>>>> requestsInFlight = new ArrayList<>();
-        final Map<String, CompletableFuture<Map<String, List<ProcessorFileResult>>>> allRequests = new HashMap<>();
+    }
+
+    public static void processLoop(List<AlbumInfo> albumInfos, SlskdService service, SlskdResponseProcessor processor, Consumer<ProcessorSearchResult> consumer) {
+
+        List<CompletableFuture<ProcessorSearchResult>> requestsInFlight = new ArrayList<>();
+        final List<CompletableFuture<ProcessorSearchResult>> allRequests = new ArrayList<>();
         for (var ai : albumInfos) {
             if (requestsInFlight.size() >= 5) {
                 CompletableFuture.allOf(requestsInFlight.toArray(CompletableFuture[]::new)).join();
                 requestsInFlight = new ArrayList<>();
             }
-            final var future = slskdService.search(ai)
+            final var future = service.search(ai)
                     .thenApply(l -> processor.process(l, ai))
-//                    .whenComplete((l, t) -> downloadConfirmer.accept(ai.name() + " " + String.join(", ", ai.artists()), l))
-                    ;
+                    .whenComplete((l, t) -> consumer.accept(l));
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
-//            requestsInFlight.add(future);
-//            allRequests.put(ai.name() + " " + String.join(", ", ai.artists()), future);
+            requestsInFlight.add(future);
+            allRequests.add(future);
         }
-        CompletableFuture.allOf(allRequests.values().toArray(CompletableFuture[]::new)).join();
+        CompletableFuture.allOf(allRequests.toArray(CompletableFuture[]::new)).join();
     }
 
-    public static class DownloadConfirmer {
+    public static class DownloadConfirmer implements Consumer<ProcessorSearchResult> {
 
-        private final BlockingQueue<Pair<String, List<SlskdSearchDetailResponse>>> queue;
+        private final BlockingQueue<ProcessorSearchResult> queue;
         private final Scanner scanner;
         private final SlskdService service;
         private final ExecutorService executor;
@@ -96,26 +102,31 @@ public class SpotifyOfflinePlaylist {
             }
         }
 
-        public synchronized void accept(final String query, final List<SlskdSearchDetailResponse> results) {
+        public void accept(ProcessorSearchResult result) {
 
-            queue.offer(Pair.of(query, results));
+            queue.offer(result);
         }
 
         private void confirm() {
             while (true) {
-                final var res = queue.poll();
-                final String searchString = res.getKey();
-                final List<SlskdSearchDetailResponse> results = res.getValue();
+                final ProcessorSearchResult res;
+                try {
+                    res = queue.take();
+                } catch (InterruptedException e) {
+                    log.error("Was interrupted", e);
+                    continue;
+                }
+                final String searchString = res.albumInfo().searchString();
                 System.out.println("For query " + searchString);
-                if (results.isEmpty()) {
+                if (res.userResults().isEmpty()) {
                     log.info("No good results for this query :\\");
                     continue;
                 }
 
-                for (var e : results) {
+                for (var e : res.userResults()) {
                     System.out.println("Will download these files from " + e.username() +": ");
-                    for (var f : e.files()) {
-                        System.out.printf("\t%s\n", f.filename());
+                    for (var f : e.bestCandidates()) {
+                        System.out.printf("\t%s\n", f.originalData().filename());
                     }
                     System.out.println("OK? [y/n/skip]");
                     boolean responseOk = false;
@@ -133,7 +144,8 @@ public class SpotifyOfflinePlaylist {
                     if (response.equals("skip")) {
                         break;
                     }
-                    boolean ok = service.initiateDownloads(e.username(), e.files().stream().map(f -> new SlskdDownloadRequest(f.filename(), f.size())).toList());
+                    boolean ok = service.initiateDownloads(e.username(), e.bestCandidates().stream()
+                            .map(f -> new SlskdDownloadRequest(f.originalData().filename(), f.originalData().size())).toList());
                     if (ok) {
                         log.info("initiated download for {} from {} OK.", searchString, e.username());
                         break;
