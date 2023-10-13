@@ -72,6 +72,11 @@ public class MusicbrainzClient {
             }
 
             @Override
+            public String fileSource() {
+                return null;
+            }
+
+            @Override
             public String slskdBaseUrl() {
                 return null;
             }
@@ -143,7 +148,7 @@ public class MusicbrainzClient {
         return SearchOptions.applyMany(result, opts);
     }
 
-    public MusicbrainzRecording getRelease(final UUID mbId) {
+    public MusicbrainzRecording getRecording(final UUID mbId) {
 
         final String query = mbId.toString();
         final MusicbrainzRecording memo = mbRecordingStore.get(query);

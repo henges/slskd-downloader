@@ -72,6 +72,11 @@ public class SlskdClient extends AbstractHttpClient {
             }
 
             @Override
+            public String fileSource() {
+                return null;
+            }
+
+            @Override
             public String slskdBaseUrl() {
                 return "http://burt-mediaserv:5030";
             }

@@ -1,10 +1,17 @@
 package dev.polluxus.spotify_offline_playlist;
 
 import au.com.muel.envconfig.EnvConfig;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.polluxus.spotify_offline_playlist.client.musicbrainz.MusicbrainzClient;
+import dev.polluxus.spotify_offline_playlist.client.musicbrainz.MusicbrainzClient.SearchOptions;
+import dev.polluxus.spotify_offline_playlist.client.musicbrainz.dto.MusicbrainzRecording;
+import dev.polluxus.spotify_offline_playlist.client.musicbrainz.dto.MusicbrainzRecording.MusicbrainzTrack;
 import dev.polluxus.spotify_offline_playlist.client.musicbrainz.dto.MusicbrainzReleaseSearchResult;
 import dev.polluxus.spotify_offline_playlist.client.slskd.request.SlskdDownloadRequest;
 import dev.polluxus.spotify_offline_playlist.config.Config;
+import dev.polluxus.spotify_offline_playlist.config.JacksonConfig;
+import dev.polluxus.spotify_offline_playlist.model.AlbumArtistPair;
 import dev.polluxus.spotify_offline_playlist.model.AlbumInfo;
 import dev.polluxus.spotify_offline_playlist.model.Playlist;
 import dev.polluxus.spotify_offline_playlist.model.Playlist.PlaylistAlbum;
@@ -18,10 +25,11 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.Function;
-import java.util.function.Supplier;
 
 public class SpotifyOfflinePlaylist {
 
@@ -54,9 +62,17 @@ public class SpotifyOfflinePlaylist {
         return ais.iterator();
     }
 
-    public static Iterator<AlbumInfo> musicbrainzFileSupplier(final MusicbrainzClient client, final List<Pair<String, String>> artistAlbumPairs) {
+    public static Iterator<AlbumInfo> musicbrainzFileSupplier(final MusicbrainzClient client, final File artistAlbumSrc) {
 
-        final Iterator<Pair<String, String>> artistAlbumPairIt = artistAlbumPairs.iterator();
+        final ObjectMapper mapper = JacksonConfig.MAPPER;
+        final List<AlbumArtistPair> pairs;
+        try {
+            pairs = mapper.readValue(artistAlbumSrc, new TypeReference<>() {});
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        final Iterator<AlbumArtistPair> artistAlbumPairIt = pairs.iterator();
 
         return new Iterator<>() {
 
@@ -67,15 +83,23 @@ public class SpotifyOfflinePlaylist {
                 if (!artistAlbumPairIt.hasNext()) {
                     return false;
                 }
-                final Pair<String, String> currPair = artistAlbumPairIt.next();
-                MusicbrainzReleaseSearchResult r = client.searchReleases(currPair.getLeft(), currPair.getRight());
-                if (r.releases().size() == 0 && !artistAlbumPairIt.hasNext()) {
-                    return false;
+                final var currPair = artistAlbumPairIt.next();
+                MusicbrainzReleaseSearchResult r = client.searchReleases(currPair.artist(), currPair.album(), SearchOptions.SORTED_DATE);
+                if (r.releases().size() == 0) {
+                    return this.hasNext();
                 }
-                final var bestMatch = r.releases().get(0);
-                final String artistName = bestMatch.artistCredit().get(0).artist().name();
-                final String albumName = bestMatch.title();
-                // TODO
+                final var bestReleaseMatch = r.releases().get(0);
+                final String artistName = bestReleaseMatch.artistCredit().get(0).artist().name();
+                final String albumName = bestReleaseMatch.title();
+                MusicbrainzRecording recording = client.getRecording(bestReleaseMatch.id());
+                if (recording.media().size() == 0) {
+                    return this.hasNext();
+                }
+                final List<String> trackTitles = recording.media().get(0)
+                        .tracks().stream().map(MusicbrainzTrack::title)
+                        .toList();
+
+                next = new AlbumInfo(albumName, null, trackTitles, List.of(artistName));
 
                 return true;
             }
@@ -83,7 +107,9 @@ public class SpotifyOfflinePlaylist {
             @Override
             public AlbumInfo next() {
 
-                return null;
+                final var ret = next;
+                next = null;
+                return ret;
             }
         };
     }
