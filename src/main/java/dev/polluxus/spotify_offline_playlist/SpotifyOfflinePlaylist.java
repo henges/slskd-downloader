@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 public class SpotifyOfflinePlaylist {
 
@@ -48,32 +49,37 @@ public class SpotifyOfflinePlaylist {
 
     }
 
-    public static void processLoop(List<AlbumInfo> albumInfos, SlskdService service, SlskdResponseProcessor processor, Consumer<ProcessorSearchResult> consumer) {
+    public static void processLoop(List<AlbumInfo> albumInfos,
+                                   SlskdService service,
+                                   SlskdResponseProcessor processor,
+                                   Function<ProcessorSearchResult, CompletableFuture<Void>> consumer) {
 
         List<CompletableFuture<ProcessorSearchResult>> requestsInFlight = new ArrayList<>();
-        final List<CompletableFuture<ProcessorSearchResult>> allRequests = new ArrayList<>();
+        final List<CompletableFuture<Void>> allRequests = new ArrayList<>();
         for (var ai : albumInfos) {
             if (requestsInFlight.size() >= 5) {
                 CompletableFuture.allOf(requestsInFlight.toArray(CompletableFuture[]::new)).join();
                 requestsInFlight = new ArrayList<>();
             }
-            final var future = service.search(ai)
-                    .thenApply(l -> processor.process(l, ai))
-                    .whenComplete((l, t) -> consumer.accept(l));
+            final var processFuture = service.search(ai)
+                    .thenApply(l -> processor.process(l, ai));
+            final var doneFuture = processFuture
+                    .thenCompose(consumer);
             try {
                 Thread.sleep(1000);
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
-            requestsInFlight.add(future);
-            allRequests.add(future);
+            requestsInFlight.add(processFuture);
+            allRequests.add(doneFuture);
         }
         CompletableFuture.allOf(allRequests.toArray(CompletableFuture[]::new)).join();
+        log.info("All requests done.");
     }
 
-    public static class DownloadConfirmer implements Consumer<ProcessorSearchResult> {
+    public static class DownloadConfirmer implements Function<ProcessorSearchResult, CompletableFuture<Void>> {
 
-        private final BlockingQueue<ProcessorSearchResult> queue;
+        private final BlockingQueue<Pair<ProcessorSearchResult, CompletableFuture<Void>>> queue;
         private final Scanner scanner;
         private final SlskdService service;
         private final ExecutorService executor;
@@ -102,20 +108,24 @@ public class SpotifyOfflinePlaylist {
             }
         }
 
-        public void accept(ProcessorSearchResult result) {
+        public CompletableFuture<Void> apply(ProcessorSearchResult result) {
 
-            queue.offer(result);
+            CompletableFuture<Void> cf = new CompletableFuture<>();
+            queue.offer(Pair.of(result, cf));
+            return cf;
         }
 
         private void confirm() {
             while (true) {
-                final ProcessorSearchResult res;
+                final Pair<ProcessorSearchResult, CompletableFuture<Void>> pair;
                 try {
-                    res = queue.take();
+                    pair = queue.take();
                 } catch (InterruptedException e) {
                     log.error("Was interrupted", e);
                     continue;
                 }
+                final var res = pair.getKey();
+                final var future = pair.getValue();
                 final String searchString = res.albumInfo().searchString();
                 System.out.println("For query " + searchString);
                 if (res.userResults().isEmpty()) {
@@ -153,6 +163,7 @@ public class SpotifyOfflinePlaylist {
                         log.info("Failed to download {} from {}... trying next result", searchString, e.username());
                     }
                 }
+                future.complete(null);
             }
         }
     }
