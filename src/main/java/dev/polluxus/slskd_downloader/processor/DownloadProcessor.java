@@ -1,7 +1,7 @@
 package dev.polluxus.slskd_downloader.processor;
 
 import dev.polluxus.slskd_downloader.client.slskd.request.SlskdDownloadRequest;
-import dev.polluxus.slskd_downloader.confirmer.TerminalConfirmer;
+import dev.polluxus.slskd_downloader.decisionmaker.TerminalDecisionMaker;
 import dev.polluxus.slskd_downloader.model.AlbumInfo;
 import dev.polluxus.slskd_downloader.processor.DownloadProcessor.DownloadResult;
 import dev.polluxus.slskd_downloader.processor.model.ProcessorSearchResult;
@@ -14,13 +14,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 public class DownloadProcessor implements Function<ProcessorSearchResult, CompletableFuture<DownloadResult>> {
 
-    public interface DownloadConfirmer {
+    public interface DecisionMaker {
         UserConfirmationResult confirm(final AlbumInfo albumInfo, final ProcessorUserResult res);
         void informSuccess(AlbumInfo ai, String username);
         void informFailure(AlbumInfo ai, String username);
@@ -31,13 +30,19 @@ public class DownloadProcessor implements Function<ProcessorSearchResult, Comple
 
     private final SlskdService service;
     private final ExecutorService executor;
-    private final DownloadConfirmer confirmer;
+    private final DecisionMaker decisionMaker;
 
     public DownloadProcessor(
             SlskdService service) {
         this.service = service;
         this.executor = Executors.newFixedThreadPool(1);
-        this.confirmer = new TerminalConfirmer();
+        this.decisionMaker = new TerminalDecisionMaker();
+    }
+
+    public DownloadProcessor(SlskdService service, DecisionMaker decisionMaker) {
+        this.service = service;
+        this.decisionMaker = decisionMaker;
+        this.executor = Executors.newFixedThreadPool(1);
     }
 
     public void stop() {
@@ -47,7 +52,7 @@ public class DownloadProcessor implements Function<ProcessorSearchResult, Comple
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
-        this.confirmer.shutdown();
+        this.decisionMaker.shutdown();
     }
 
     public enum UserConfirmationResult {
@@ -75,7 +80,7 @@ public class DownloadProcessor implements Function<ProcessorSearchResult, Comple
             }
 
             resultsLoop: for (var e : res.userResults()) {
-                switch (confirmer.confirm(res.albumInfo(), e)) {
+                switch (decisionMaker.confirm(res.albumInfo(), e)) {
                     case NO -> {
                         continue;
                     }
@@ -90,11 +95,11 @@ public class DownloadProcessor implements Function<ProcessorSearchResult, Comple
 
                         if (ok) {
                             downloadResult.set(DownloadResult.OK);
-                            confirmer.informSuccess(res.albumInfo(), e.username());
+                            decisionMaker.informSuccess(res.albumInfo(), e.username());
                             break resultsLoop;
                         } else {
                             downloadResult.set(DownloadResult.TRIED_FAILED);
-                            confirmer.informFailure(res.albumInfo(), e.username());
+                            decisionMaker.informFailure(res.albumInfo(), e.username());
                         }
                     }
                 }

@@ -47,4 +47,19 @@ public abstract class UoeDefaultConfig implements Config {
     public Optional<String> fileSource() {
         throw new UnsupportedOperationException();
     }
+
+    @Override
+    public Optional<String> rateYourMusicUser() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public double rateYourMusicMinRating() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public double rateYourMusicMaxRating() {
+        throw new UnsupportedOperationException();
+    }
 }

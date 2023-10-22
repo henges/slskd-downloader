@@ -33,6 +33,21 @@ public class RateYourMusicClient extends AbstractRateLimitedHttpClient {
             public String dataDirectory() {
                 return "C:\\Users\\alexa\\.spotify_offline_playlist";
             }
+
+            @Override
+            public Optional<String> rateYourMusicUser() {
+                return Optional.of("hovering");
+            }
+
+            @Override
+            public double rateYourMusicMinRating() {
+                return 3.5;
+            }
+
+            @Override
+            public double rateYourMusicMaxRating() {
+                return 5.0;
+            }
         };
 
         create(c);
@@ -51,13 +66,13 @@ public class RateYourMusicClient extends AbstractRateLimitedHttpClient {
         return new RateYourMusicClient(client, mapper, resultStore);
     }
 
-    public List<AlbumArtistPair> getAllRatings(final String username, final double lowerBound) {
+    public List<AlbumArtistPair> getAllRatings(final String username, final double lowerBound, final double upperBound) {
 
         final List<AlbumArtistPair> allRatings = new ArrayList<>();
         List<AlbumArtistPair> currentList;
         int pageNumber = 1;
         do {
-            currentList = getRatings(username, lowerBound, 5.0, Optional.of(pageNumber));
+            currentList = getRatings(username, lowerBound, upperBound, Optional.of(pageNumber));
             allRatings.addAll(currentList);
             pageNumber++;
         } while (currentList.size() >= PAGE_SIZE);

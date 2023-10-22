@@ -1,7 +1,7 @@
-package dev.polluxus.slskd_downloader.confirmer;
+package dev.polluxus.slskd_downloader.decisionmaker;
 
 import dev.polluxus.slskd_downloader.model.AlbumInfo;
-import dev.polluxus.slskd_downloader.processor.DownloadProcessor.DownloadConfirmer;
+import dev.polluxus.slskd_downloader.processor.DownloadProcessor.DecisionMaker;
 import dev.polluxus.slskd_downloader.processor.DownloadProcessor.UserConfirmationResult;
 import dev.polluxus.slskd_downloader.processor.model.ProcessorUserResult;
 import dev.polluxus.slskd_downloader.util.OutputMultiplexer;
@@ -11,13 +11,13 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Comparator;
 
-public class TerminalConfirmer implements DownloadConfirmer {
+public class TerminalDecisionMaker implements DecisionMaker {
 
-    private static final Logger log = LoggerFactory.getLogger(TerminalConfirmer.class);
+    private static final Logger log = LoggerFactory.getLogger(TerminalDecisionMaker.class);
 
     private final OutputMultiplexer console;
 
-    public TerminalConfirmer() {
+    public TerminalDecisionMaker() {
         this.console = OutputMultiplexer.withStdin(TextIoFactory.getTextTerminal());
     }
 

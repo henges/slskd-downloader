@@ -6,6 +6,7 @@ import dev.polluxus.slskd_downloader.client.musicbrainz.MusicbrainzClient;
 import dev.polluxus.slskd_downloader.client.musicbrainz.MusicbrainzClient.SearchOptions;
 import dev.polluxus.slskd_downloader.client.musicbrainz.dto.MusicbrainzRecording;
 import dev.polluxus.slskd_downloader.client.musicbrainz.dto.MusicbrainzReleaseSearchResult;
+import dev.polluxus.slskd_downloader.client.rym.RateYourMusicClient;
 import dev.polluxus.slskd_downloader.config.Config;
 import dev.polluxus.slskd_downloader.config.JacksonConfig;
 import dev.polluxus.slskd_downloader.model.AlbumArtistPair;
@@ -25,10 +26,16 @@ public class AlbumInfoSupplier {
 
     public static Iterator<AlbumInfo> from(Config config) {
 
+        if (config.rateYourMusicUser().isPresent()) {
+            RateYourMusicClient rym = RateYourMusicClient.create(config);
+            MusicbrainzClient musicbrainzClient = MusicbrainzClient.create(config);
+            return rateYourMusicSupplier(config, musicbrainzClient, rym);
+        }
+
         if (config.fileSource().isPresent()) {
             MusicbrainzClient mbc = MusicbrainzClient.create(config);
             File f = new File(config.fileSource().get());
-            return musicbrainzFileSupplier(mbc, f);
+            return fileSupplier(mbc, f);
         }
 
         if (config.spotifyClientId().isPresent()) {
@@ -51,7 +58,7 @@ public class AlbumInfoSupplier {
         return ais.iterator();
     }
 
-    public static Iterator<AlbumInfo> musicbrainzFileSupplier(final MusicbrainzClient client, final File artistAlbumSrc) {
+    public static Iterator<AlbumInfo> fileSupplier(final MusicbrainzClient client, final File artistAlbumSrc) {
 
         final ObjectMapper mapper = JacksonConfig.MAPPER;
         final List<AlbumArtistPair> pairs;
@@ -61,7 +68,21 @@ public class AlbumInfoSupplier {
             throw new RuntimeException(e);
         }
 
-        final Iterator<AlbumArtistPair> artistAlbumPairIt = pairs.iterator();
+        final Iterator<AlbumArtistPair> pairsIt = pairs.iterator();
+        return musicbrainzAlbumArtistPairIterator(pairsIt, client);
+    }
+
+    public static Iterator<AlbumInfo> rateYourMusicSupplier(final Config config, final MusicbrainzClient mb, final RateYourMusicClient rym) {
+
+        final var allResults = rym.getAllRatings(
+                config.rateYourMusicUser().orElseThrow(),
+                config.rateYourMusicMinRating(),
+                config.rateYourMusicMaxRating());
+
+        return musicbrainzAlbumArtistPairIterator(allResults.iterator(), mb);
+    }
+
+    private static Iterator<AlbumInfo> musicbrainzAlbumArtistPairIterator(Iterator<AlbumArtistPair> pairsIt, MusicbrainzClient client) {
 
         return new Iterator<>() {
 
@@ -69,19 +90,19 @@ public class AlbumInfoSupplier {
 
             @Override
             public boolean hasNext() {
-                if (!artistAlbumPairIt.hasNext()) {
+                if (!pairsIt.hasNext()) {
                     return false;
                 }
-                final var currPair = artistAlbumPairIt.next();
+                final var currPair = pairsIt.next();
                 MusicbrainzReleaseSearchResult r = client.searchReleases(currPair.artist(), currPair.album(), SearchOptions.SORTED_DATE);
-                if (r.releases().size() == 0) {
+                if (r.releases().isEmpty()) {
                     return this.hasNext();
                 }
                 final var bestReleaseMatch = r.releases().get(0);
                 final String artistName = bestReleaseMatch.artistCredit().get(0).artist().name();
                 final String albumName = bestReleaseMatch.title();
                 MusicbrainzRecording recording = client.getRecording(bestReleaseMatch.id());
-                if (recording.media().size() == 0) {
+                if (recording.media().isEmpty()) {
                     return this.hasNext();
                 }
                 final List<AlbumTrack> tracks = recording.media().stream()

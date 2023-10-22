@@ -8,6 +8,7 @@ import dev.polluxus.slskd_downloader.client.slskd.request.SlskdDownloadRequest;
 import dev.polluxus.slskd_downloader.client.slskd.response.SlskdSearchDetailResponse;
 import dev.polluxus.slskd_downloader.client.slskd.response.SlskdSearchStateResponse;
 import dev.polluxus.slskd_downloader.model.AlbumInfo;
+import dev.polluxus.slskd_downloader.util.FutureUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

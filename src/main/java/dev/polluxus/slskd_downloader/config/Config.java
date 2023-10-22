@@ -14,9 +14,17 @@ public interface Config {
     @EnvVar(defaultValue = "slskd")
     String slskdPassword();
 
+    Optional<String> fileSource();
+
     Optional<String> spotifyClientId();
     Optional<String> spotifyClientSecret();
     Optional<String> spotifyPlaylistId();
 
-    Optional<String> fileSource();
+    Optional<String> rateYourMusicUser();
+
+    @EnvVar(defaultValue = "3.5")
+    double rateYourMusicMinRating();
+
+    @EnvVar(defaultValue = "5.0")
+    double rateYourMusicMaxRating();
 }

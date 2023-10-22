@@ -4,6 +4,7 @@ import au.com.muel.envconfig.EnvConfig;
 import dev.polluxus.slskd_downloader.client.rym.RateYourMusicClient;
 import dev.polluxus.slskd_downloader.config.Config;
 import dev.polluxus.slskd_downloader.config.UoeDefaultConfig;
+import dev.polluxus.slskd_downloader.decisionmaker.UnattendedDecisionMaker;
 import dev.polluxus.slskd_downloader.infosupplier.AlbumInfoSupplier;
 import dev.polluxus.slskd_downloader.model.AlbumInfo;
 import dev.polluxus.slskd_downloader.processor.DownloadProcessor;
@@ -25,19 +26,6 @@ public class SlskdDownloader {
     private static final Logger log = LoggerFactory.getLogger(SlskdDownloader.class);
 
     public static void main(String[] args) {
-        Config c = new UoeDefaultConfig() {
-            @Override
-            public String dataDirectory() {
-                return "C:\\Users\\alexa\\.spotify_offline_playlist";
-            }
-        };
-
-        RateYourMusicClient client = RateYourMusicClient.create(c);
-        System.out.println("Client.");
-    }
-
-
-    public static void main1(String[] args) {
 
         final Config config = EnvConfig.fromEnv(Config.class);
 
@@ -50,7 +38,7 @@ public class SlskdDownloader {
     public static void process(final Iterator<AlbumInfo> supplier, SlskdService slskdService) {
 
         final SlskdResponseProcessor processor = new SlskdResponseProcessor(MatchStrategyType.EDIT_DISTANCE);
-        final DownloadProcessor downloadProcessor = new DownloadProcessor(slskdService);
+        final DownloadProcessor downloadProcessor = new DownloadProcessor(slskdService, new UnattendedDecisionMaker());
 
         processLoop(supplier, slskdService, processor, downloadProcessor);
         downloadProcessor.stop();
@@ -66,6 +54,8 @@ public class SlskdDownloader {
         final Map<AlbumInfo, CompletableFuture<DownloadResult>> allRequests = new HashMap<>();
         while (albumInfos.hasNext()) {
             final AlbumInfo ai = albumInfos.next();
+            // When the 'queue size' hits its maximum, wait for every search to be complete before continuing
+            //
             if (requestsInFlight.size() >= 5) {
                 CompletableFuture.allOf(requestsInFlight.toArray(CompletableFuture[]::new)).join();
                 requestsInFlight = new ArrayList<>();

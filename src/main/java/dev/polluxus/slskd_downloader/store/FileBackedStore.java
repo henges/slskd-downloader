@@ -59,10 +59,10 @@ public class FileBackedStore<T> implements Store<T> {
 
         final File data = Path.of(parentDir.getPath(), key + ".json").toFile();
         try {
-             final boolean existed = data.createNewFile();
-             if (existed) {
+             if (data.exists()) {
                  log.info("Overwriting file {} ({} bytes)...", data.getPath(), data.length());
              }
+             data.createNewFile();
              mapper.writeValue(data, value);
         } catch (IOException e) {
             throw new RuntimeException(e);
