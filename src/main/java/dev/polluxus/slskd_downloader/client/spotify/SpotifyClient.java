@@ -1,4 +1,4 @@
-package dev.polluxus.slskd_downloader.client;
+package dev.polluxus.slskd_downloader.client.spotify;
 
 import com.google.common.collect.Lists;
 import dev.polluxus.slskd_downloader.config.Config;

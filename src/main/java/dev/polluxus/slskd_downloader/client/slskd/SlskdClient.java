@@ -12,6 +12,7 @@ import dev.polluxus.slskd_downloader.client.slskd.response.SlskdLoginResponse;
 import dev.polluxus.slskd_downloader.client.slskd.response.SlskdSearchDetailResponse;
 import dev.polluxus.slskd_downloader.client.slskd.response.SlskdSearchStateResponse;
 import dev.polluxus.slskd_downloader.config.JacksonConfig;
+import dev.polluxus.slskd_downloader.config.UoeDefaultConfig;
 import org.apache.hc.client5.http.classic.HttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 import org.apache.hc.core5.http.ContentType;
@@ -20,7 +21,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 public class SlskdClient extends AbstractHttpClient {
@@ -49,32 +49,7 @@ public class SlskdClient extends AbstractHttpClient {
     }
 
     public static void main(String[] args) throws InterruptedException {
-        final var c = create(new Config() {
-            @Override
-            public Optional<String> spotifyClientId() {
-                return null;
-            }
-
-            @Override
-            public Optional<String> spotifyClientSecret() {
-                return null;
-            }
-
-            @Override
-            public Optional<String> spotifyPlaylistId() {
-                return null;
-            }
-
-            @Override
-            public String dataDirectory() {
-                return null;
-            }
-
-            @Override
-            public Optional<String> fileSource() {
-                return null;
-            }
-
+        final var c = create(new UoeDefaultConfig() {
             @Override
             public String slskdBaseUrl() {
                 return "http://burt-mediaserv:5030";

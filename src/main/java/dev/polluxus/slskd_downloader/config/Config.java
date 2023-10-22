@@ -19,6 +19,4 @@ public interface Config {
     Optional<String> spotifyPlaylistId();
 
     Optional<String> fileSource();
-
-
 }

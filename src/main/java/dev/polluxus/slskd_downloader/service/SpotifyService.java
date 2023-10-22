@@ -1,7 +1,7 @@
 package dev.polluxus.slskd_downloader.service;
 
 import dev.polluxus.slskd_downloader.config.Config;
-import dev.polluxus.slskd_downloader.client.SpotifyClient;
+import dev.polluxus.slskd_downloader.client.spotify.SpotifyClient;
 import dev.polluxus.slskd_downloader.model.AlbumInfo;
 import dev.polluxus.slskd_downloader.model.Playlist;
 import dev.polluxus.slskd_downloader.model.Playlist.PlaylistAlbum;

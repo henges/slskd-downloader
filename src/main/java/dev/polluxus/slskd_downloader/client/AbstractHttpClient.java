@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hc.client5.http.classic.HttpClient;
 import org.apache.hc.core5.http.ClassicHttpRequest;
+import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.http.io.HttpClientResponseHandler;
 
 import java.io.IOException;
@@ -12,12 +13,19 @@ import java.io.InputStream;
 
 public abstract class AbstractHttpClient {
 
-    private final HttpClient client;
-    private final ObjectMapper mapper;
+    protected final HttpClient client;
+    protected final ObjectMapper mapper;
 
     public AbstractHttpClient(HttpClient client, ObjectMapper mapper) {
         this.client = client;
         this.mapper = mapper;
+    }
+
+    protected void validateStatusCode(final int expected, final ClassicHttpResponse resp) {
+
+        if (resp.getCode() != expected) {
+            throw new RuntimeException(STR."Expected status code \{expected}, but got \{resp.getCode()}");
+        }
     }
 
     protected <T> T doRequest(final ClassicHttpRequest req, final Class<T> klazz) {
@@ -34,9 +42,7 @@ public abstract class AbstractHttpClient {
     protected <T> T doRequest(final ClassicHttpRequest req, final int expectedStatus, final Class<T> klazz) {
 
         return executeUnchecked(req, resp -> {
-            if (resp.getCode() != expectedStatus) {
-                throw new RuntimeException("Expected status code " + expectedStatus + ", but got " + resp.getCode());
-            }
+            validateStatusCode(expectedStatus, resp);
             if (klazz == Void.class) {
                 return null;
             }
@@ -47,9 +53,7 @@ public abstract class AbstractHttpClient {
     protected <T> T doRequest(final ClassicHttpRequest req, final int expectedStatus, final TypeReference<T> typeReference) {
 
         return executeUnchecked(req, resp -> {
-            if (resp.getCode() != expectedStatus) {
-                throw new RuntimeException("Expected status code " + expectedStatus + ", but got " + resp.getCode());
-            }
+            validateStatusCode(expectedStatus, resp);
             return readValueUnchecked(resp.getEntity().getContent(), typeReference);
         });
     }

@@ -5,8 +5,8 @@
   <artifactId>slskd-downloader</artifactId>
   <version>0.0.1</version>
   <properties>
-    <maven.compiler.source>17</maven.compiler.source>
-    <maven.compiler.target>17</maven.compiler.target>
+    <maven.compiler.source>21</maven.compiler.source>
+    <maven.compiler.target>21</maven.compiler.target>
   </properties>
   <name>Slskd Downloader</name>
   <url>https://polluxus.dev</url>
@@ -63,6 +63,11 @@
       <version>1.4.7</version>
     </dependency>
     <dependency>
+      <groupId>org.jsoup</groupId>
+      <artifactId>jsoup</artifactId>
+      <version>1.15.3</version>
+    </dependency>
+    <dependency>
       <groupId>org.beryx</groupId>
       <artifactId>text-io</artifactId>
       <version>3.4.1</version>
@@ -97,6 +102,9 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
         <version>3.11.0</version>
+        <configuration>
+          <compilerArgs>--enable-preview</compilerArgs>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
