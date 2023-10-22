@@ -1,9 +1,7 @@
 package dev.polluxus.slskd_downloader;
 
 import au.com.muel.envconfig.EnvConfig;
-import dev.polluxus.slskd_downloader.client.rym.RateYourMusicClient;
 import dev.polluxus.slskd_downloader.config.Config;
-import dev.polluxus.slskd_downloader.config.UoeDefaultConfig;
 import dev.polluxus.slskd_downloader.decisionmaker.UnattendedDecisionMaker;
 import dev.polluxus.slskd_downloader.infosupplier.AlbumInfoSupplier;
 import dev.polluxus.slskd_downloader.model.AlbumInfo;
@@ -29,52 +27,44 @@ public class SlskdDownloader {
 
         final Config config = EnvConfig.fromEnv(Config.class);
 
-        final SlskdService slskdService = new SlskdService(config);
-        final Iterator<AlbumInfo> supplier = AlbumInfoSupplier.from(config);
-
-        process(supplier, slskdService);
+        process(config);
     }
 
-    public static void process(final Iterator<AlbumInfo> supplier, SlskdService slskdService) {
+    public static void process(final Config config) {
+
+        final SlskdService slskdService = new SlskdService(config);
+        final Iterator<AlbumInfo> supplier = AlbumInfoSupplier.from(config);
 
         final SlskdResponseProcessor processor = new SlskdResponseProcessor(MatchStrategyType.EDIT_DISTANCE);
         final DownloadProcessor downloadProcessor = new DownloadProcessor(slskdService, new UnattendedDecisionMaker());
 
-        processLoop(supplier, slskdService, processor, downloadProcessor);
+        Map<AlbumInfo, CompletableFuture<DownloadResult>> results = pipeline(supplier, slskdService, processor, downloadProcessor);
+        postComplete(results);
+
         downloadProcessor.stop();
         slskdService.shutdown();
     }
 
-    public static void processLoop(Iterator<AlbumInfo> albumInfos,
-                                   SlskdService service,
-                                   SlskdResponseProcessor processor,
-                                   Function<ProcessorSearchResult, CompletableFuture<DownloadResult>> consumer) {
+    public static Map<AlbumInfo, CompletableFuture<DownloadResult>> pipeline(Iterator<AlbumInfo> albumInfos,
+                                SlskdService service,
+                                SlskdResponseProcessor processor,
+                                Function<ProcessorSearchResult, CompletableFuture<DownloadResult>> consumer) {
 
-        List<CompletableFuture<ProcessorSearchResult>> requestsInFlight = new ArrayList<>();
         final Map<AlbumInfo, CompletableFuture<DownloadResult>> allRequests = new HashMap<>();
         while (albumInfos.hasNext()) {
             final AlbumInfo ai = albumInfos.next();
-            // When the 'queue size' hits its maximum, wait for every search to be complete before continuing
-            //
-            if (requestsInFlight.size() >= 5) {
-                CompletableFuture.allOf(requestsInFlight.toArray(CompletableFuture[]::new)).join();
-                requestsInFlight = new ArrayList<>();
-            }
-            final var processFuture = service.search(ai)
-                    .thenApply(l -> processor.process(l, ai));
-            final var doneFuture = processFuture
+            final var doneFuture = service.search(ai)
+                    .thenApply(l -> processor.process(l, ai))
                     .thenCompose(consumer);
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-            requestsInFlight.add(processFuture);
             allRequests.put(ai, doneFuture);
         }
         CompletableFuture.allOf(allRequests.values().toArray(CompletableFuture[]::new)).join();
         log.info("All requests done.");
-        Map<DownloadResult, List<AlbumInfo>> failures = allRequests.entrySet().stream()
+        return allRequests;
+    }
+
+    public static void postComplete(Map<AlbumInfo, CompletableFuture<DownloadResult>> results) {
+        Map<DownloadResult, List<AlbumInfo>> failures = results.entrySet().stream()
                 .filter(e -> !e.getValue().join().equals(DownloadResult.OK))
                 .collect(Collectors.toMap(
                         e -> e.getValue().join(),

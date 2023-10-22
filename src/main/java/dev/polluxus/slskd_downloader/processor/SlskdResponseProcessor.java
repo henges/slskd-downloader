@@ -72,7 +72,10 @@ public class SlskdResponseProcessor {
 
         final List<List<ProcessorFileResult>> prfs = builder.byTrackName().values().stream()
                 // Score the matches and return any one of the highest scoring matches
-                .map(pfrb -> pfrb.stream().map(this::scoreMatches).map(ProcessorFileResultBuilder::build).sorted(Comparator.comparing(ProcessorFileResult::score, Comparator.reverseOrder())).toList())
+                .map(pfrb -> pfrb.stream().map(this::scoreMatches)
+                        .map(ProcessorFileResultBuilder::build)
+                        .sorted(Comparator.comparing(ProcessorFileResult::score, Comparator.reverseOrder()))
+                        .toList())
                 .toList();
         final Map<String, ProcessorFileResult> uniques = new HashMap<>();
         for (var res : prfs) {

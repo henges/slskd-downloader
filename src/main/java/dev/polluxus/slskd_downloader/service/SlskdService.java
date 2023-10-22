@@ -1,7 +1,5 @@
 package dev.polluxus.slskd_downloader.service;
 
-import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import dev.polluxus.slskd_downloader.config.Config;
 import dev.polluxus.slskd_downloader.client.slskd.SlskdClient;
 import dev.polluxus.slskd_downloader.client.slskd.request.SlskdDownloadRequest;
@@ -12,8 +10,7 @@ import dev.polluxus.slskd_downloader.util.FutureUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -22,13 +19,17 @@ public class SlskdService {
 
     private static final Logger log = LoggerFactory.getLogger(SlskdService.class);
 
+    private static final int SEARCH_POOL_SIZE = 5;
+
     private final SlskdClient client;
-    private final ExecutorService pool;
+    private final ExecutorService searchPool;
+    private final List<CompletableFuture<?>> searchQueue;
     private final Map<String, SlskdSearchStateResponse> allSearchStates;
 
     public SlskdService(Config config) {
         this.client = SlskdClient.create(config);
-        this.pool = Executors.newWorkStealingPool();
+        this.searchPool = Executors.newFixedThreadPool(SEARCH_POOL_SIZE);
+        this.searchQueue = new ArrayList<>(SEARCH_POOL_SIZE);
         this.allSearchStates = client.getAllSearchStates()
                 .stream()
                 .collect(Collectors.toMap(
@@ -47,7 +48,18 @@ public class SlskdService {
 
     public CompletableFuture<List<SlskdSearchDetailResponse>> search(final String searchString) {
 
-        return CompletableFuture.supplyAsync(() -> {
+        // Once we've submitted the task limit, wait for everything to complete, then
+        // wait an additional five seconds to reduce load on the network
+        if (searchQueue.size() == SEARCH_POOL_SIZE) {
+            CompletableFuture.allOf(searchQueue.toArray(CompletableFuture[]::new)).join();
+            FutureUtils.sleep(5000);
+            searchQueue.clear();
+        }
+
+        final var future = CompletableFuture.supplyAsync(() -> {
+            // If there's already an exact match for this search string, don't execute the search
+            // again. This is useful mostly for development and could probably be removed once
+            // the program is more stable.
             final SlskdSearchStateResponse initResp;
             if (allSearchStates.containsKey(searchString)) {
                 log.info("Found existing search for string {}", searchString);
@@ -57,15 +69,17 @@ public class SlskdService {
                 initResp = client.search(searchString);
             }
 
+            // Poll the server every second until we get a 'Completed' state. After 45 polls,
+            // give up on the request.
+            int pollCount = 0;
             String state = initResp.state();
             while (!state.contains("Completed")) {
+                if (pollCount++ > 45) {
+                    throw new RuntimeException(STR."Timed out search \"\{searchString}\" after 45 seconds");
+                }
+                FutureUtils.sleep(1000);
                 final var currState = client.getSearchState(initResp.id());
                 state = currState.state();
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    // Ignore
-                }
             }
 
             var responses = client.getSearchResponses(initResp.id());
@@ -73,11 +87,15 @@ public class SlskdService {
             log.info("Got {} responses for query {}", responses.size(), searchString);
 
             return responses;
-        }, this.pool)
+        }, this.searchPool)
         .exceptionally(t -> {
             log.error("Exception while retrieving search for {}", searchString, t);
             return List.of();
         });
+
+        searchQueue.add(future);
+
+        return future;
     }
 
     public boolean initiateDownloads(final String hostUser, final List<SlskdDownloadRequest> files) {
@@ -92,9 +110,9 @@ public class SlskdService {
     }
 
     public void shutdown() {
-        this.pool.shutdownNow();
+        this.searchPool.shutdownNow();
         try {
-            this.pool.awaitTermination(15000, TimeUnit.MILLISECONDS);
+            this.searchPool.awaitTermination(15000, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             log.error("Error terminating SlskdService worker pool", e);
         }

@@ -12,4 +12,13 @@ public class FutureUtils {
             throw new RuntimeException(e);
         }
     }
+
+    public static void sleep(long timeout) {
+
+        try {
+            Thread.sleep(timeout);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
 }
