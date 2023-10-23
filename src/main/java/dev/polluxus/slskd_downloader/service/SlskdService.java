@@ -1,5 +1,6 @@
 package dev.polluxus.slskd_downloader.service;
 
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import dev.polluxus.slskd_downloader.config.Config;
 import dev.polluxus.slskd_downloader.client.slskd.SlskdClient;
 import dev.polluxus.slskd_downloader.client.slskd.request.SlskdDownloadRequest;
@@ -12,6 +13,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -19,15 +21,23 @@ public class SlskdService {
 
     private static final Logger log = LoggerFactory.getLogger(SlskdService.class);
 
-    private static final int SEARCH_POOL_SIZE = 5;
+    // Package-private constants, may be used in tests
+    static final int SEARCH_POOL_SIZE = 5;
+    static final int MAX_CONCURRENT_ACTIVE_DOWNLOADS = 10;
 
     private final SlskdClient client;
+
     private final ExecutorService searchPool;
     private final List<CompletableFuture<?>> searchQueue;
     private final Map<String, SlskdSearchStateResponse> allSearchStates;
 
-    public SlskdService(Config config) {
-        this.client = SlskdClient.create(config);
+    private final AtomicBoolean canDownload;
+    private final Object canDownloadLock = new Object();
+    private final ScheduledExecutorService canDownloadExecutor;
+
+    public SlskdService(SlskdClient client) {
+
+        this.client = client;
         this.searchPool = Executors.newFixedThreadPool(SEARCH_POOL_SIZE);
         this.searchQueue = new ArrayList<>(SEARCH_POOL_SIZE);
         this.allSearchStates = client.getAllSearchStates()
@@ -39,6 +49,50 @@ public class SlskdService {
                         // result only
                         (o1, o2) -> o2
                 ));
+        this.canDownload = new AtomicBoolean(true);
+        this.canDownloadExecutor = new ScheduledThreadPoolExecutor(1);
+    }
+
+    public SlskdService(Config config) {
+        this(SlskdClient.create(config));
+    }
+
+    private boolean started = false;
+
+    /**
+     * Allows starting the service separately to instantiation
+     * @return this object (for chaining)
+     */
+    @CanIgnoreReturnValue
+    public SlskdService start() {
+        if (started) {
+            return this;
+        }
+        started = true;
+
+        Runnable checkCanDownload = () -> {
+            synchronized (canDownloadLock) {
+                final boolean oldValue = canDownload.get();
+                // Impose a maximum of 10 concurrent downloads from different users. This arbitrary number
+                // is picked as a good candidate for saturating the connection.
+                final boolean newValue = client.getAllDownloads()
+                        .stream().filter(r -> r.directories().stream()
+                                .anyMatch(d -> d.files().stream()
+                                        .anyMatch(f -> f.state().contains("InProgress"))))
+                        .toList()
+                        .size() < MAX_CONCURRENT_ACTIVE_DOWNLOADS;
+                canDownload.set(newValue);
+                // If the value transitioned from false to true, wakeup the waiters
+                if (!oldValue && newValue) {
+                    canDownloadLock.notifyAll();
+                }
+            }
+        };
+        // Run it once inline, blocking the calling thread, to initialise 'can download' properly
+        checkCanDownload.run();
+        // Run all other invocations on the executor
+        canDownloadExecutor.scheduleAtFixedRate(checkCanDownload, 1000, 1000, TimeUnit.MILLISECONDS);
+        return this;
     }
 
     public CompletableFuture<List<SlskdSearchDetailResponse>> search(final AlbumInfo albumInfo) {
@@ -98,7 +152,21 @@ public class SlskdService {
         return future;
     }
 
+    private void ensureCanDownload() {
+
+        synchronized (canDownloadLock) {
+            while (!canDownload.get()) {
+                try {
+                    canDownloadLock.wait();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+    }
+
     public boolean initiateDownloads(final String hostUser, final List<SlskdDownloadRequest> files) {
+        ensureCanDownload();
 
         try {
             client.initiateDownloads(hostUser, files);
@@ -111,8 +179,10 @@ public class SlskdService {
 
     public void shutdown() {
         this.searchPool.shutdownNow();
+        this.canDownloadExecutor.shutdownNow();
         try {
             this.searchPool.awaitTermination(15000, TimeUnit.MILLISECONDS);
+            this.canDownloadExecutor.awaitTermination(15000, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             log.error("Error terminating SlskdService worker pool", e);
         }

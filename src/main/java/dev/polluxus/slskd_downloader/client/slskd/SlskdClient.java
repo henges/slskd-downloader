@@ -3,6 +3,7 @@ package dev.polluxus.slskd_downloader.client.slskd;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
+import dev.polluxus.slskd_downloader.client.slskd.response.SlskdGetDownloadResponse;
 import dev.polluxus.slskd_downloader.config.Config;
 import dev.polluxus.slskd_downloader.client.AbstractHttpClient;
 import dev.polluxus.slskd_downloader.client.slskd.request.SlskdDownloadRequest;
@@ -48,7 +49,7 @@ public class SlskdClient extends AbstractHttpClient {
         }
     }
 
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) {
         final var c = create(new UoeDefaultConfig() {
             @Override
             public String slskdBaseUrl() {
@@ -123,6 +124,15 @@ public class SlskdClient extends AbstractHttpClient {
 
         ensureAuthValid();
         final var req = ClassicRequestBuilder.get(baseUrl + API_PREFIX + "/searches/" + id + "/responses")
+                .addHeader("Authorization", token.headerValue())
+                .build();
+        return doRequest(req, new TypeReference<>() {});
+    }
+
+    public List<SlskdGetDownloadResponse> getAllDownloads() {
+
+        ensureAuthValid();
+        final var req = ClassicRequestBuilder.get(baseUrl + API_PREFIX + "/transfers/downloads")
                 .addHeader("Authorization", token.headerValue())
                 .build();
         return doRequest(req, new TypeReference<>() {});
