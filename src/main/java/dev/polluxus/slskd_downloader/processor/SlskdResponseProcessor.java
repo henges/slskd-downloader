@@ -4,11 +4,18 @@ import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import dev.polluxus.slskd_downloader.client.slskd.response.SlskdSearchDetailResponse;
 import dev.polluxus.slskd_downloader.model.AlbumInfo;
 import dev.polluxus.slskd_downloader.processor.matcher.MatchStrategyType;
-import dev.polluxus.slskd_downloader.processor.model.*;
+import dev.polluxus.slskd_downloader.processor.model.output.*;
+import dev.polluxus.slskd_downloader.processor.model.input.ProcessorInputUser;
+import dev.polluxus.slskd_downloader.processor.model.output.ProcessorDirectoryResult;
+import dev.polluxus.slskd_downloader.processor.model.output.ProcessorFileResult;
+import dev.polluxus.slskd_downloader.processor.model.output.ProcessorSearchResult;
+import dev.polluxus.slskd_downloader.processor.model.output.ProcessorUserResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
+import java.util.Map.Entry;
+import java.util.stream.Collectors;
 
 import static dev.polluxus.slskd_downloader.processor.matcher.MatchStrategy.FILE_FORMAT_PATTERN;
 
@@ -25,6 +32,7 @@ public class SlskdResponseProcessor {
     public ProcessorSearchResult process(List<SlskdSearchDetailResponse> resps, AlbumInfo albumInfo) {
 
         return new ProcessorSearchResult(albumInfo, resps.stream()
+                .map(ProcessorInputUser::convert)
                 .map(r -> findMatches(r, albumInfo))
                 .map(this::computeBestFiles)
                 .map(r -> scoreUser(r, albumInfo))
@@ -34,20 +42,34 @@ public class SlskdResponseProcessor {
                 .toList());
     }
 
-    private ProcessorUserResultBuilder findMatches(SlskdSearchDetailResponse resp, AlbumInfo albumInfo) {
+    private ProcessorUserResultBuilder findMatches(ProcessorInputUser resp, AlbumInfo albumInfo) {
 
-        final Map<String, List<ProcessorFileResultBuilder>> matches = matchStrategy.match(resp, albumInfo);
-        matches.values().stream().flatMap(Collection::stream)
-                .forEach(a -> a
-                        .isTargetFormat(FILE_FORMAT_PATTERN.matcher(a.originalData().filename()).find())
-                        // Almost all audio files will be at least 500kb and this helps
-                        // filter out e.g. tiny metadata files that contain the song name
-                        .sizeOk(a.originalData().size() > 500_000)
-                );
+        final List<ProcessorDirectoryResult> directoryResults = resp.directories().stream()
+                .map(d -> {
+                    final Map<String, List<ProcessorFileResultBuilder>> matches = matchStrategy.match(d, albumInfo);
+                    matches.values().stream().flatMap(Collection::stream)
+                            .forEach(a -> a
+                                    .isTargetFormat(FILE_FORMAT_PATTERN.matcher(a.originalData().filename()).find())
+                                    // Almost all audio files will be at least 500kb and this helps
+                                    // filter out e.g. tiny metadata files that contain the song name
+                                    .sizeOk(a.originalData().size() > 500_000)
+                            );
+                    return new ProcessorDirectoryResult(matches);
+                })
+                .toList();
 
         return ProcessorUserResultBuilder.builder()
-                .username(resp.username())
-                .byTrackName(matches);
+                .username(resp.originalData().username())
+                .byTrackName(directoryResults.stream()
+                        .flatMap(d -> d.byTrackName().entrySet().stream())
+                        .collect(Collectors.toMap(
+                                Entry::getKey,
+                                Entry::getValue,
+                                (o1, o2) -> {
+                                    o1.addAll(o2);
+                                    return o1;
+                                }
+                        )));
     }
 
     private static final int MATCHED_TRACKS_POINTS = 50;
@@ -70,6 +92,8 @@ public class SlskdResponseProcessor {
 
     private ProcessorUserResultBuilder computeBestFiles(ProcessorUserResultBuilder builder) {
 
+        // TODO here: use directories in scoring, give a higher score to a directory
+        //  based on how many tracks it matches, select results by-directory
         final List<List<ProcessorFileResult>> prfs = builder.byTrackName().values().stream()
                 // Score the matches and return any one of the highest scoring matches
                 .map(pfrb -> pfrb.stream().map(this::scoreMatches)

@@ -17,12 +17,13 @@ import static org.mockito.Mockito.when;
 
 public class SlskdServiceTest {
 
-    private final SlskdClient client = mock(SlskdClient.class);
+    private SlskdClient client;
 
     private SlskdService service;
 
     @BeforeEach
     public void setup() {
+        client = mock(SlskdClient.class);
         service = new SlskdService(client);
     }
 

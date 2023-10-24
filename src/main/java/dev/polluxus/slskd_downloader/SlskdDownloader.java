@@ -9,7 +9,7 @@ import dev.polluxus.slskd_downloader.processor.DownloadProcessor;
 import dev.polluxus.slskd_downloader.processor.DownloadProcessor.DownloadResult;
 import dev.polluxus.slskd_downloader.processor.SlskdResponseProcessor;
 import dev.polluxus.slskd_downloader.processor.matcher.MatchStrategyType;
-import dev.polluxus.slskd_downloader.processor.model.ProcessorSearchResult;
+import dev.polluxus.slskd_downloader.processor.model.output.ProcessorSearchResult;
 import dev.polluxus.slskd_downloader.service.SlskdService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

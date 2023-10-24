@@ -1,4 +1,4 @@
-package dev.polluxus.slskd_downloader.processor.model;
+package dev.polluxus.slskd_downloader.processor.model.output;
 
 import dev.polluxus.slskd_downloader.client.slskd.response.SlskdSearchDetailResponse.SlskdSearchMatchResponse;
 import dev.polluxus.slskd_downloader.config.Builder;

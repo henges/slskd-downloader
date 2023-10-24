@@ -1,10 +1,9 @@
 package dev.polluxus.slskd_downloader.processor.matcher;
 
-import dev.polluxus.slskd_downloader.client.slskd.response.SlskdSearchDetailResponse;
-import dev.polluxus.slskd_downloader.client.slskd.response.SlskdSearchDetailResponse.SlskdSearchMatchResponse;
 import dev.polluxus.slskd_downloader.model.AlbumInfo;
-import dev.polluxus.slskd_downloader.processor.model.ProcessorFileResultBuilder;
-import dev.polluxus.slskd_downloader.processor.model.ProcessorMatchDetailsBuilder;
+import dev.polluxus.slskd_downloader.processor.model.output.ProcessorFileResultBuilder;
+import dev.polluxus.slskd_downloader.processor.model.input.ProcessorInputUser.ProcessorInputDirectory;
+import dev.polluxus.slskd_downloader.processor.model.output.ProcessorMatchDetailsBuilder;
 import dev.polluxus.slskd_downloader.util.FilenameUtils;
 import org.apache.commons.text.similarity.LevenshteinDistance;
 
@@ -41,10 +40,10 @@ public class EditDistanceStrategy implements MatchStrategy {
     }
 
     @Override
-    public Map<String, List<ProcessorFileResultBuilder>> apply(SlskdSearchDetailResponse resp, AlbumInfo albumInfo) {
+    public Map<String, List<ProcessorFileResultBuilder>> apply(ProcessorInputDirectory resp, AlbumInfo albumInfo) {
 
         Map<String, List<ProcessorFileResultBuilder>> matchesForPattern = new HashMap<>(albumInfo.tracks().size());
-        for (SlskdSearchMatchResponse currentResult : resp.files()) {
+        for (var currentResult : resp.files()) {
 
             final String originalFilename = currentResult.filename();
             final String sanitisedFileName = sanitiseFilename(originalFilename, albumInfo);
@@ -61,7 +60,7 @@ public class EditDistanceStrategy implements MatchStrategy {
                 if (distance != -1) {
 
                     var pr = ProcessorFileResultBuilder.builder()
-                            .originalData(currentResult)
+                            .originalData(currentResult.originalData())
                             .matchDetails(ProcessorMatchDetailsBuilder.builder()
                                     .matchesTitle(currentTarget)
                                     .distance(distance)

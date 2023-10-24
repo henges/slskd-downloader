@@ -3,7 +3,7 @@ package dev.polluxus.slskd_downloader.decisionmaker;
 import dev.polluxus.slskd_downloader.model.AlbumInfo;
 import dev.polluxus.slskd_downloader.processor.DownloadProcessor.DecisionMaker;
 import dev.polluxus.slskd_downloader.processor.DownloadProcessor.UserConfirmationResult;
-import dev.polluxus.slskd_downloader.processor.model.ProcessorUserResult;
+import dev.polluxus.slskd_downloader.processor.model.output.ProcessorUserResult;
 import dev.polluxus.slskd_downloader.util.OutputMultiplexer;
 import org.beryx.textio.TextIoFactory;
 import org.slf4j.Logger;
