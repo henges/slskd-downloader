@@ -65,7 +65,9 @@ public class FileBackedStore<T> implements Store<T> {
              data.createNewFile();
              mapper.writeValue(data, value);
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            log.error("Error saving file {}", data.getPath(), e);
+            // Actually just swallow the exception - the cache is best effort.
+            // throw new RuntimeException(e);
         }
     }
 }

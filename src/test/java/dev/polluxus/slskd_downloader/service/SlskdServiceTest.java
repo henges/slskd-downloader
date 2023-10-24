@@ -4,19 +4,14 @@ import dev.polluxus.slskd_downloader.client.slskd.SlskdClient;
 import dev.polluxus.slskd_downloader.client.slskd.response.SlskdGetDownloadResponse;
 import dev.polluxus.slskd_downloader.client.slskd.response.SlskdGetDownloadResponse.SlskdDownloadDirectoryResponse;
 import dev.polluxus.slskd_downloader.client.slskd.response.SlskdGetDownloadResponse.SlskdDownloadFileResponse;
-import dev.polluxus.slskd_downloader.config.Config;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.Mockito;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 import static dev.polluxus.slskd_downloader.service.SlskdService.MAX_CONCURRENT_ACTIVE_DOWNLOADS;
-import static org.junit.Assert.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -26,7 +21,7 @@ public class SlskdServiceTest {
 
     private SlskdService service;
 
-    @Before
+    @BeforeEach
     public void setup() {
         service = new SlskdService(client);
     }

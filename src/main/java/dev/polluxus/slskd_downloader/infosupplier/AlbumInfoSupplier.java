@@ -16,6 +16,8 @@ import dev.polluxus.slskd_downloader.model.Playlist;
 import dev.polluxus.slskd_downloader.model.Playlist.PlaylistAlbum;
 import dev.polluxus.slskd_downloader.model.Playlist.PlaylistSong;
 import dev.polluxus.slskd_downloader.service.SpotifyService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -23,6 +25,8 @@ import java.util.Iterator;
 import java.util.List;
 
 public class AlbumInfoSupplier {
+
+    private static final Logger log = LoggerFactory.getLogger(AlbumInfoSupplier.class);
 
     public static Iterator<AlbumInfo> from(Config config) {
 
@@ -94,25 +98,31 @@ public class AlbumInfoSupplier {
                     return false;
                 }
                 final var currPair = pairsIt.next();
-                MusicbrainzReleaseSearchResult r = client.searchReleases(currPair.artist(), currPair.album(), SearchOptions.SORTED_DATE);
-                if (r.releases().isEmpty()) {
-                    return this.hasNext();
-                }
-                final var bestReleaseMatch = r.releases().get(0);
-                final String artistName = bestReleaseMatch.artistCredit().get(0).artist().name();
-                final String albumName = bestReleaseMatch.title();
-                MusicbrainzRecording recording = client.getRecording(bestReleaseMatch.id());
-                if (recording.media().isEmpty()) {
-                    return this.hasNext();
-                }
-                final List<AlbumTrack> tracks = recording.media().stream()
-                        .flatMap(m -> m.tracks().stream())
-                        .map(t -> new AlbumTrack(t.number(), t.title()))
-                        .toList();
+                try {
+                    MusicbrainzReleaseSearchResult r = client.searchReleases(currPair.artist(), currPair.album(), SearchOptions.SORTED_DATE);
 
-                next = new AlbumInfo(albumName, null, tracks, List.of(artistName));
+                    if (r.releases().isEmpty()) {
+                        return this.hasNext();
+                    }
+                    final var bestReleaseMatch = r.releases().get(0);
+                    final String artistName = bestReleaseMatch.artistCredit().get(0).artist().name();
+                    final String albumName = bestReleaseMatch.title();
+                    MusicbrainzRecording recording = client.getRecording(bestReleaseMatch.id());
+                    if (recording.media().isEmpty()) {
+                        return this.hasNext();
+                    }
+                    final List<AlbumTrack> tracks = recording.media().stream()
+                            .flatMap(m -> m.tracks().stream())
+                            .map(t -> new AlbumTrack(t.number(), t.title()))
+                            .toList();
 
-                return true;
+                    next = new AlbumInfo(albumName, null, tracks, List.of(artistName));
+
+                    return true;
+                } catch (Exception e) {
+                    log.error("Error in album info provider", e);
+                    return false;
+                }
             }
 
             @Override

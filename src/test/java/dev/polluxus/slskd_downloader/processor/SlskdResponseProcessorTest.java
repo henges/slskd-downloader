@@ -1,7 +1,5 @@
 package dev.polluxus.slskd_downloader.processor;
 
-import dev.polluxus.slskd_downloader.processor.matcher.MatchStrategyType;
-import org.junit.Test;
 
 // TODO
 public class SlskdResponseProcessorTest extends AbstractProcessorTest {

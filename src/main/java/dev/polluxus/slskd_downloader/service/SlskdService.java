@@ -102,6 +102,9 @@ public class SlskdService {
 
     public CompletableFuture<List<SlskdSearchDetailResponse>> search(final String searchString) {
 
+        // Wait for the download limit
+        ensureCanDownload();
+
         // Once we've submitted the task limit, wait for everything to complete, then
         // wait an additional five seconds to reduce load on the network
         if (searchQueue.size() == SEARCH_POOL_SIZE) {

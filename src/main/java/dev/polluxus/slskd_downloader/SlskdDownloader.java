@@ -48,7 +48,7 @@ public class SlskdDownloader {
                 slskdService,
                 processor,
                 downloadProcessor,
-                (ai) -> ai.name().equalsIgnoreCase("For Organ and Brass"));
+                (ai) -> ai.name().equalsIgnoreCase("Galaxy 2 Galaxy"));
         postComplete(results);
 
         downloadProcessor.stop();
@@ -76,7 +76,11 @@ public class SlskdDownloader {
             }
             final var doneFuture = service.search(ai)
                     .thenApply(l -> processor.process(l, ai))
-                    .thenCompose(consumer);
+                    .thenCompose(consumer)
+                    .exceptionally(t -> {
+                        log.error("Handling exception in pipeline not caught by more specific handler", t);
+                        return DownloadResult.TRIED_FAILED;
+                    });
             allRequests.put(ai, doneFuture);
         }
         CompletableFuture.allOf(allRequests.values().toArray(CompletableFuture[]::new)).join();
@@ -86,11 +90,16 @@ public class SlskdDownloader {
 
     public static void postComplete(Map<AlbumInfo, CompletableFuture<DownloadResult>> results) {
         Map<DownloadResult, List<AlbumInfo>> failures = results.entrySet().stream()
-                .filter(e -> !e.getValue().join().equals(DownloadResult.OK))
                 .collect(Collectors.groupingBy(e -> e.getValue().join(), mapping(Entry::getKey, toList())));
+
+        final List<AlbumInfo> ok = failures.getOrDefault(DownloadResult.OK, List.of());
         final List<AlbumInfo> triedAndFailed = failures.getOrDefault(DownloadResult.TRIED_FAILED, List.of());
         final List<AlbumInfo> didntTry = failures.getOrDefault(DownloadResult.DIDNT_TRY, List.of());
         final List<AlbumInfo> explicitlySkipped = failures.getOrDefault(DownloadResult.EXPLICITLY_SKIPPED, List.of());
+        if (!ok.isEmpty()) {
+            log.info("The following downloads were submitted OK:");
+            triedAndFailed.forEach(ai -> log.info("\t{}", ai.searchString()));
+        }
         if (!triedAndFailed.isEmpty()) {
             log.info("The following searches were attempted, but failed to download correctly:");
             triedAndFailed.forEach(ai -> log.info("\t{}", ai.searchString()));
