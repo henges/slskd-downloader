@@ -17,7 +17,8 @@ public record ProcessorFileResult(
     @Builder
     public record ProcessorMatchDetails(
             String matchesTitle,
+            String matchesNumber,
             // Only for Levenshtein
-            @Nullable Integer distance
+            int distance
     ) {}
 }

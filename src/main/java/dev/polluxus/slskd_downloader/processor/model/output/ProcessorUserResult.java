@@ -11,7 +11,6 @@ public record ProcessorUserResult(
         String username,
         List<ProcessorFileResult> bestCandidates,
         double scoreOfBestCandidates,
-        Map<String, List<ProcessorFileResultBuilder>> byTrackName,
-        List<ProcessorDirectoryResult> directories
+        List<ProcessorDirectoryResultBuilder> directories
 ) {
 }

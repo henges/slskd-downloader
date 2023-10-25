@@ -16,6 +16,7 @@ import dev.polluxus.slskd_downloader.model.Playlist;
 import dev.polluxus.slskd_downloader.model.Playlist.PlaylistAlbum;
 import dev.polluxus.slskd_downloader.model.Playlist.PlaylistSong;
 import dev.polluxus.slskd_downloader.service.SpotifyService;
+import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

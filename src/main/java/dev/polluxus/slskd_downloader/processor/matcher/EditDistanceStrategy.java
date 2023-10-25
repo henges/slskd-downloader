@@ -15,7 +15,11 @@ import java.util.regex.Pattern;
 
 public class EditDistanceStrategy implements MatchStrategy {
 
-    private static final Pattern TRACK_NUMBER_PATTERN = Pattern.compile("^\\d+(\s|\\.|-)*");
+    // Matches e.g. '1-01' - for multi disk albums
+    private static final Pattern MULTI_DISK_TRACK_NUMBER_PATTERN = Pattern.compile("^\\d+-\\d+\\s+");
+    // Generic matcher that tries to match as many 'track number' looking characters at the start of the string
+    // Have to be careful to not match a track number that itself is numeric (e.g.: Global Communication's 76:14)
+    private static final Pattern GENERIC_TRACK_NUMBER_PATTERN = Pattern.compile("^\\d+(\s|\\.|-)*");
     private static final LevenshteinDistance LEVENSHTEIN_DISTANCE_1 = new LevenshteinDistance(1);
     private static final LevenshteinDistance LEVENSHTEIN_DISTANCE_4 = new LevenshteinDistance(4);
 
@@ -24,9 +28,11 @@ public class EditDistanceStrategy implements MatchStrategy {
         final String remoteFilename = FilenameUtils.getName(filename);
         final String remoteBaseName = FilenameUtils.getBaseName(remoteFilename);
         final String stripArtistName = albumInfo.artists().stream().reduce(remoteBaseName, (old, in) -> old.replaceAll(in, ""));
-        final String strippedTrackNumber = TRACK_NUMBER_PATTERN.matcher(stripArtistName).replaceFirst("");
-
-        return strippedTrackNumber;
+        final var multiDiskMatcher = MULTI_DISK_TRACK_NUMBER_PATTERN.matcher(stripArtistName);
+        if (multiDiskMatcher.find()) {
+            return multiDiskMatcher.replaceFirst("");
+        }
+        return GENERIC_TRACK_NUMBER_PATTERN.matcher(stripArtistName).replaceFirst("");
     }
 
     private LevenshteinDistance getEditDistanceFunc(final String trackName) {
@@ -63,9 +69,10 @@ public class EditDistanceStrategy implements MatchStrategy {
                             .originalData(currentResult.originalData())
                             .matchDetails(ProcessorMatchDetailsBuilder.builder()
                                     .matchesTitle(currentTarget)
+                                    .matchesNumber(currentTrack.number())
                                     .distance(distance)
                                     .build());
-                    matchesForPattern.computeIfAbsent(currentTarget, (k) -> new ArrayList<>()).add(pr);
+                    matchesForPattern.computeIfAbsent(currentTrack.numberAndTitle(), (k) -> new ArrayList<>()).add(pr);
                 }
             }
         }

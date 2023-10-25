@@ -13,10 +13,15 @@ public record AlbumInfo(
     public record AlbumTrack(
             String number,
             String title
-    ) {}
+    ) {
+
+        public String numberAndTitle() {
+            return STR."\{number} - \{title}";
+        }
+    }
 
     public String searchString() {
 
-        return String.join(" ", artists) + " " + name;
+        return STR."\{String.join(" ", artists)} \{name}";
     }
 }
