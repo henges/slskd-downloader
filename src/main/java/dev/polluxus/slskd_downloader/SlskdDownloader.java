@@ -1,6 +1,8 @@
 package dev.polluxus.slskd_downloader;
 
 import au.com.muel.envconfig.EnvConfig;
+import com.fasterxml.jackson.core.type.TypeReference;
+import dev.polluxus.slskd_downloader.client.slskd.response.SlskdSearchDetailResponse;
 import dev.polluxus.slskd_downloader.config.Config;
 import dev.polluxus.slskd_downloader.decisionmaker.UnattendedDecisionMaker;
 import dev.polluxus.slskd_downloader.infosupplier.AlbumInfoSupplier;
@@ -11,9 +13,12 @@ import dev.polluxus.slskd_downloader.processor.SlskdResponseProcessor;
 import dev.polluxus.slskd_downloader.processor.matcher.MatchStrategyType;
 import dev.polluxus.slskd_downloader.processor.model.output.ProcessorSearchResult;
 import dev.polluxus.slskd_downloader.service.SlskdService;
+import dev.polluxus.slskd_downloader.store.FileBackedStore;
+import dev.polluxus.slskd_downloader.store.Store;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.file.Path;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;

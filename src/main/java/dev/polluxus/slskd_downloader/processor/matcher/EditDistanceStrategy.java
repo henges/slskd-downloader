@@ -22,6 +22,7 @@ public class EditDistanceStrategy implements MatchStrategy {
     private static final Pattern GENERIC_TRACK_NUMBER_PATTERN = Pattern.compile("^\\d+(\s|\\.|-)*");
     private static final LevenshteinDistance LEVENSHTEIN_DISTANCE_1 = new LevenshteinDistance(1);
     private static final LevenshteinDistance LEVENSHTEIN_DISTANCE_4 = new LevenshteinDistance(4);
+    private static final LevenshteinDistance LEVENSHTEIN_DISTANCE_8 = new LevenshteinDistance(8);
 
     private String sanitiseFilename(final String filename, final AlbumInfo albumInfo) {
 
@@ -40,8 +41,10 @@ public class EditDistanceStrategy implements MatchStrategy {
         final int length = trackName.length();
         if (length <= 6) {
             return LEVENSHTEIN_DISTANCE_1;
-        } else {
+        } else if (length <= 25) {
             return LEVENSHTEIN_DISTANCE_4;
+        } else {
+            return LEVENSHTEIN_DISTANCE_8;
         }
     }
 

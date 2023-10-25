@@ -6,14 +6,21 @@ import dev.polluxus.slskd_downloader.client.slskd.response.SlskdSearchDetailResp
 import dev.polluxus.slskd_downloader.config.JacksonConfig;
 import dev.polluxus.slskd_downloader.model.AlbumInfo;
 import dev.polluxus.slskd_downloader.processor.matcher.MatchStrategyType;
+import dev.polluxus.slskd_downloader.util.PrintUtils;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.reflections.Reflections;
+import org.reflections.scanners.ResourcesScanner;
+import org.reflections.scanners.Scanners;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 // TODO
 public class SlskdResponseProcessorTest extends AbstractProcessorTest {
@@ -26,15 +33,31 @@ public class SlskdResponseProcessorTest extends AbstractProcessorTest {
     @BeforeAll
     static void init() throws IOException {
 
+        Pattern p = Pattern.compile("(requests|responses)/");
         TEST_REQUEST_DATA = new HashMap<>();
         TEST_RESULT_DATA = new HashMap<>();
-        final AlbumInfo demdikeRequest = JacksonConfig.MAPPER
-                .readValue(SlskdResponseProcessorTest.class.getResource("/slskd-processor-request-demdike-tryptych.json"), new TypeReference<>() {});
-        final List<SlskdSearchDetailResponse> demdikeResult = JacksonConfig.MAPPER
-                .readValue(SlskdResponseProcessorTest.class.getResource("/slskd-processor-response-demdike-tryptych.json"), new TypeReference<>() {});
 
-        TEST_REQUEST_DATA.put("demdike", demdikeRequest);
-        TEST_RESULT_DATA.put("demdike", demdikeResult);
+        final Set<String> requestNames = new Reflections("requests", Scanners.Resources).getResources(".*");
+        final Set<String> responseNames = new Reflections("responses", Scanners.Resources).getResources(".*");
+
+        requestNames.forEach(s -> {
+            try {
+                AlbumInfo ai = JacksonConfig.MAPPER.readValue(SlskdResponseProcessorTest.class.getResourceAsStream("/" + s), AlbumInfo.class);
+                TEST_REQUEST_DATA.put(p.matcher(s).replaceFirst(""), ai);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        responseNames.forEach(s -> {
+            try {
+                List<SlskdSearchDetailResponse> ai =
+                        JacksonConfig.MAPPER.readValue(SlskdResponseProcessorTest.class.getResourceAsStream("/" + s), new TypeReference<>() {});
+                TEST_RESULT_DATA.put(p.matcher(s).replaceFirst(""), ai);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        Assertions.assertEquals(TEST_REQUEST_DATA.keySet(), TEST_RESULT_DATA.keySet());
     }
 
     @BeforeEach
@@ -42,37 +65,28 @@ public class SlskdResponseProcessorTest extends AbstractProcessorTest {
         processor = new SlskdResponseProcessor(MatchStrategyType.EDIT_DISTANCE);
     }
 
-//    @Test
-//    public void test_gen() throws JsonProcessingException {
-//
-//        String json = "{\"title\":\"Tryptych\",\"media\":[{\"track-count\":3,\"tracks\":[{\"number\":\"1\",\"title\":\"Forest of Evil (Dusk)\"},{\"number\":\"2\",\"title\":\"Forest of Evil (Dawn)\"},{\"number\":\"3\",\"title\":\"Quiet Sky\"}]},{\"track-count\":9,\"tracks\":[{\"number\":\"1\",\"title\":\"Gaged in Stammheim\"},{\"number\":\"2\",\"title\":\"Eurydice\"},{\"number\":\"3\",\"title\":\"Regolith\"},{\"number\":\"4\",\"title\":\"The Stars Are Moving\"},{\"number\":\"5\",\"title\":\"Bardo Thodol\"},{\"number\":\"6\",\"title\":\"Matilda's Dream\"},{\"number\":\"7\",\"title\":\"Nothing but the Night 2\"},{\"number\":\"8\",\"title\":\"Library of Solomon Book 1\"},{\"number\":\"9\",\"title\":\"Library of Solomon Book 2\"}]},{\"track-count\":11,\"tracks\":[{\"number\":\"1\",\"title\":\"Black Sun\"},{\"number\":\"2\",\"title\":\"Hashshashin Chant\"},{\"number\":\"3\",\"title\":\"Repository of Light\"},{\"number\":\"4\",\"title\":\"Of Decay & Shadows\"},{\"number\":\"5\",\"title\":\"Rain & Shame\"},{\"number\":\"6\",\"title\":\"Desert Ascetic\"},{\"number\":\"7\",\"title\":\"Viento De Levante\"},{\"number\":\"8\",\"title\":\"Leptonic Matter\"},{\"number\":\"9\",\"title\":\"A Tale of Sand\"},{\"number\":\"10\",\"title\":\"Filtered Through Prejudice\"},{\"number\":\"11\",\"title\":\"Past Is Past\"}]}]}";
-//        MusicbrainzRecording recording = JacksonConfig.MAPPER.readValue(json, MusicbrainzRecording.class);
-//
-//        final List<AlbumTrack> tracks = recording.media().stream().flatMap(m -> m.tracks().stream()).map(t -> new AlbumTrack(t.number(), t.title())).toList();
-//        AlbumInfo ai = new AlbumInfo("Tryptych", null, tracks, List.of("Demdike Stare"));
-//        System.out.println(JacksonConfig.MAPPER.writeValueAsString(ai));
-//    }
-
     @Test
     public void testProcessor_demdike() {
 
-        final var res = processor.process(TEST_RESULT_DATA.get("demdike"), TEST_REQUEST_DATA.get("demdike"));
-        System.out.println("");
-    }
+        TEST_REQUEST_DATA.keySet().stream()
+                .map(k -> processor.process(TEST_RESULT_DATA.get(k), TEST_REQUEST_DATA.get(k)))
+                // Find results where the
+                .filter(r -> !r.userResults().isEmpty() && r.userResults().getFirst().bestCandidates().size() != r.albumInfo().tracks().size())
+                .forEach(res -> {
 
-//    @Test
-//    public void test() {
-//
-//        var processor = new SlskdResponseProcessor(MatchStrategyType.EDIT_DISTANCE);
-//        var reses = processor.process(responses, albumInfo);
-//
-//        reses.userResults().stream().forEach(pur -> {
-//            System.out.printf("User %s, score %f:\n\n", pur.username(), pur.scoreOfBestCandidates());
-//            pur.bestCandidates().stream().forEach(pfr -> {
-//                System.out.printf("%s - score %f\n", pfr.originalData().filename(), pfr.score());
-//            });
-//        });
-//
-//        System.out.println("");
-//    }
+                    System.out.println(STR."For query \{res.albumInfo().searchString()}");
+                    System.out.println("Desired tracklist is:");
+                    for (var t : res.albumInfo().tracks()) {
+                        System.out.printf("\t%s - %s\n", t.number(), t.title());
+                    }
+                    System.out.println(STR."(\{res.albumInfo().tracks().size()} tracks total)");
+                    if (res.userResults().isEmpty()) {
+                        System.out.println("But there are no results for this query");
+                    } else for (int i = 0; i < 1 && i < res.userResults().size(); i++) {
+                        System.out.println(STR."Result \{i+1} for user \{res.userResults().get(i).username()}");
+                        System.out.println(PrintUtils.printProcessorUserResult(res.userResults().get(i), albumInfo));
+                    }
+                    System.out.println("##########################################################");
+                });
+    }
 }

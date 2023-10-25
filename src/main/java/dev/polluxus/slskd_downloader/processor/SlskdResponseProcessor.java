@@ -148,6 +148,7 @@ public class SlskdResponseProcessor {
                 var albumTrk = new AlbumTrack(trk.matchDetails().matchesNumber(), trk.matchDetails().matchesTitle());
                 if (tracksToMatch.contains(albumTrk.numberAndTitle())) {
                     finalMatches.add(trk);
+                    tracksToMatch.remove(albumTrk.numberAndTitle());
                 }
             }
         }

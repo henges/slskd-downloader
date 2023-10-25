@@ -16,3 +16,6 @@ target
 .data
 *.log
 *.iml
+
+src/test/resources/requests
+src/test/resources/responses
