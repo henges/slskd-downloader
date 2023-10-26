@@ -10,12 +10,10 @@ import org.apache.commons.text.similarity.LevenshteinDistance;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static dev.polluxus.slskd_downloader.util.Matchers.*;
@@ -24,11 +22,7 @@ public class EditDistanceStrategy implements MatchStrategy {
 
     private static final Logger log = LoggerFactory.getLogger(EditDistanceStrategy.class);
 
-    private static final ConcurrentMap<String, Pattern> artistNamePatternCache = new ConcurrentHashMap<>();
-
-    private static final LevenshteinDistance LEVENSHTEIN_DISTANCE_1 = new LevenshteinDistance(1);
-    private static final LevenshteinDistance LEVENSHTEIN_DISTANCE_4 = new LevenshteinDistance(4);
-    private static final LevenshteinDistance LEVENSHTEIN_DISTANCE_8 = new LevenshteinDistance(8);
+    private static final ConcurrentMap<String, Pattern> PATTERN_CACHE = new ConcurrentHashMap<>();
 
     private String applyTrackNumberMatchers(final String filename) {
 
@@ -46,7 +40,7 @@ public class EditDistanceStrategy implements MatchStrategy {
     private String maybeStripArtistName(final String filename, List<String> artists) {
 
         final String after = artists.stream().reduce(filename,
-                (old, in) -> artistNamePatternCache.computeIfAbsent(in, n -> Pattern.compile(n, Pattern.CASE_INSENSITIVE))
+                (old, in) -> PATTERN_CACHE.computeIfAbsent(in, n -> Pattern.compile(Pattern.quote(n), Pattern.CASE_INSENSITIVE))
                         .matcher(old).replaceFirst(""));
         final String afterTrackNumberMatchers = applyTrackNumberMatchers(after);
         // It's likely that the artist name is also the track name
@@ -59,28 +53,47 @@ public class EditDistanceStrategy implements MatchStrategy {
         return after;
     }
 
-    private String sanitiseFilename(final String filename, final AlbumInfo albumInfo) {
+    private String maybeStripAlbumName(final String filename, AlbumInfo albumInfo) {
 
-        final String remoteBaseName = FilenameUtils.getBaseName(filename);
-        final String unescaped = StringEscapeUtils.unescapeHtml4(remoteBaseName);
-        final String stripArtistName = maybeStripArtistName(unescaped, albumInfo.artists());
-        final String stripTrackNumber = applyTrackNumberMatchers(stripArtistName);
-        final String stripGarbage = LEADING_GARBAGE.matcher(stripTrackNumber).replaceFirst("");
-        final String stripFeature = FEATURED_ARTIST_MATCHER.matcher(stripGarbage).replaceAll("");
-        return stripFeature
-                .replaceAll("’", "'");
+        // If there's a track on this album that contains the title of the album,
+        // we expect the album title to occur at most once in the filename
+        final int expectedOccurrences = albumInfo.hasTrackContainingTitle() ? 1 : 0;
+        final Pattern p = PATTERN_CACHE.computeIfAbsent(albumInfo.name(), n -> Pattern.compile(Pattern.quote(n), Pattern.CASE_INSENSITIVE));
+        long titleMatches = p.matcher(filename).results().count();
+        String strippedName = filename;
+        // Presumably the user has prefixed the track title with the album name, so just
+        // replace the first instance. It's possible to have a track name where the title
+        // is repeated more than once, so if we replace any more, we might miss matches.
+        if (titleMatches > expectedOccurrences) {
+            strippedName = p.matcher(strippedName).replaceFirst("");
+        }
+        final String afterTrackNumberMatchers = applyTrackNumberMatchers(strippedName);
+        // It's likely that the artist name is also the track name
+        if (afterTrackNumberMatchers.isEmpty()) {
+            log.trace("Not stripping album name ({}) from track {} because it would be empty after sanitisation!",
+                    albumInfo.name(), filename);
+            return filename;
+        }
+
+        return strippedName;
     }
 
-    private LevenshteinDistance getEditDistanceFunc(final String trackName) {
+    private String sanitiseFilename(final String filename, final AlbumInfo albumInfo) {
 
-        final int length = trackName.length();
-        if (length <= 6) {
-            return LEVENSHTEIN_DISTANCE_1;
-        } else if (length <= 25) {
-            return LEVENSHTEIN_DISTANCE_4;
-        } else {
-            return LEVENSHTEIN_DISTANCE_8;
-        }
+        // Using Optional here makes it easier to tweak which stages are included
+        final String ret = Optional.of(filename)
+                .map(FilenameUtils::getBaseName)
+                .map(StringEscapeUtils::unescapeHtml4)
+                .map(n -> maybeStripArtistName(n, albumInfo.artists()))
+                .map(n -> maybeStripAlbumName(n, albumInfo))
+                .map(n -> LEADING_GARBAGE.matcher(n).replaceFirst(""))
+                .map(this::applyTrackNumberMatchers)
+                .map(n -> LEADING_GARBAGE.matcher(n).replaceFirst(""))
+                .map(n -> FEATURED_ARTIST_MATCHER.matcher(n).replaceAll(""))
+                .map(n -> n.replaceAll("’", "'"))
+                .orElseThrow();
+
+        return ret;
     }
 
     @Override
