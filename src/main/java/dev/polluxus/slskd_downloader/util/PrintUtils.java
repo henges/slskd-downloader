@@ -12,9 +12,13 @@ public class PrintUtils {
         final StringBuilder sb = new StringBuilder();
 
         for (var f : r.bestCandidates().stream().sorted(Comparator.comparing(x -> x.originalData().filename())).toList()) {
-            sb.append(String.format("\t%s\n", f.originalData().filename()));
+            sb.append(String.format("\t%s (score %2f)\n", f.originalData().filename(), f.score()));
         }
-        sb.append(STR."\{r.bestCandidates().size()} tracks total (\{r.bestCandidates().size() == ai.tracks().size() ? "correct number" : "NOT CORRECT number"})\n");
+        sb.append(STR."\{r.bestCandidates().size()} tracks total")
+                .append(STR."(\{r.bestCandidates().size() == ai.tracks().size() ? "correct number" : "NOT CORRECT number"})")
+                .append("\n")
+                .append(STR."Score \{r.scoreOfBestCandidates()}")
+                .append("\n");
 
         return sb.toString();
     }

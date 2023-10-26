@@ -41,6 +41,10 @@ public class SlskdResponseProcessor {
 
     private ProcessorUserResultBuilder findMatches(ProcessorInputUser resp, AlbumInfo albumInfo) {
 
+//        if (resp.originalData().username().equals("Shokyy")) {
+//            System.out.println();
+//        }
+
         final List<ProcessorDirectoryResultBuilder> directoryResults = resp.directories().stream()
                 .map(d -> {
                     final Map<String, List<ProcessorFileResultBuilder>> matches = matchStrategy.match(d, albumInfo);
@@ -80,36 +84,8 @@ public class SlskdResponseProcessor {
         return builder;
     }
 
-    private ProcessorUserResultBuilder computeBestFilesOriginal(ProcessorUserResultBuilder builder) {
-
-//        final List<List<ProcessorFileResult>> prfs = builder.byTrackName().values().stream()
-//                // Score the matches and return any one of the highest scoring matches
-//                .map(pfrb -> pfrb.stream().map(this::scoreMatches)
-//                        .map(ProcessorFileResultBuilder::build)
-//                        .sorted(Comparator.comparing(ProcessorFileResult::score, Comparator.reverseOrder()))
-//                        .toList())
-//                .toList();
-//        final Map<String, ProcessorFileResult> uniques = new HashMap<>();
-//        for (var res : prfs) {
-//            for (var entry : res) {
-//                final String key = entry.originalData().filename();
-//                // Skip entries that matched more than one name
-//                if (uniques.containsKey(key)) {
-//                    continue;
-//                }
-//                uniques.put(key, entry);
-//                break;
-//            }
-//        }
-
-//        builder.bestCandidates(uniques.values().stream().toList());
-
-        return builder;
-    }
-
     private ProcessorUserResultBuilder computeBestDirectories(ProcessorUserResultBuilder builder, AlbumInfo albumInfo) {
 
-        // Oh my god, I have no idea if this is correct.
         builder.directories().forEach(d -> {
             // Find the best candidates from each directory
             // Compute the overall score of the directory - the number of candidate tracks matched.

@@ -16,10 +16,7 @@ import org.reflections.scanners.ResourcesScanner;
 import org.reflections.scanners.Scanners;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Pattern;
 
 // TODO
@@ -66,12 +63,16 @@ public class SlskdResponseProcessorTest extends AbstractProcessorTest {
     }
 
     @Test
-    public void testProcessor_demdike() {
+    public void testProcessor_dataPreview() {
 
         TEST_REQUEST_DATA.keySet().stream()
+//                .filter(k -> k.equals("Cherushii-Memory of Water.json"))
                 .map(k -> processor.process(TEST_RESULT_DATA.get(k), TEST_REQUEST_DATA.get(k)))
-                // Find results where the
-                .filter(r -> !r.userResults().isEmpty() && r.userResults().getFirst().bestCandidates().size() != r.albumInfo().tracks().size())
+                // Find results where the best candidate doesn't have the right # of tracks
+                .filter(r -> !r.userResults().isEmpty() && r.userResults().getFirst().bestCandidates().size() < r.albumInfo().tracks().size())
+                // Find results where the best candidate has a score less than 1.0
+                .filter(r -> !r.userResults().isEmpty() && r.userResults().getFirst().scoreOfBestCandidates() < 1.0)
+                .sorted(Comparator.comparing(r -> r.userResults().getFirst().scoreOfBestCandidates()))
                 .forEach(res -> {
 
                     System.out.println(STR."For query \{res.albumInfo().searchString()}");
@@ -82,9 +83,9 @@ public class SlskdResponseProcessorTest extends AbstractProcessorTest {
                     System.out.println(STR."(\{res.albumInfo().tracks().size()} tracks total)");
                     if (res.userResults().isEmpty()) {
                         System.out.println("But there are no results for this query");
-                    } else for (int i = 0; i < 1 && i < res.userResults().size(); i++) {
+                    } else for (int i = 0; i < 5 && i < res.userResults().size(); i++) {
                         System.out.println(STR."Result \{i+1} for user \{res.userResults().get(i).username()}");
-                        System.out.println(PrintUtils.printProcessorUserResult(res.userResults().get(i), albumInfo));
+                        System.out.println(PrintUtils.printProcessorUserResult(res.userResults().get(i), res.albumInfo()));
                     }
                     System.out.println("##########################################################");
                 });

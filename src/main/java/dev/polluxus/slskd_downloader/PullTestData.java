@@ -40,5 +40,7 @@ public class PullTestData {
             albumStore.put(name, curr);
             resultStore.put(name, res);
         }
+
+        slskdService.shutdown();
     }
 }

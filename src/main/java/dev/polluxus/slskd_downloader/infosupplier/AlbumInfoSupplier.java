@@ -16,6 +16,7 @@ import dev.polluxus.slskd_downloader.model.Playlist;
 import dev.polluxus.slskd_downloader.model.Playlist.PlaylistAlbum;
 import dev.polluxus.slskd_downloader.model.Playlist.PlaylistSong;
 import dev.polluxus.slskd_downloader.service.SpotifyService;
+import dev.polluxus.slskd_downloader.util.Matchers;
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -114,7 +115,15 @@ public class AlbumInfoSupplier {
                     }
                     final List<AlbumTrack> tracks = recording.media().stream()
                             .flatMap(m -> m.tracks().stream())
-                            .map(t -> new AlbumTrack(t.number(), t.title()))
+                            .map(t -> {
+                                final String rawTrackTitle = t.title();
+                                final String sanitisedTrackTitle = Matchers.FEATURED_ARTIST_MATCHER
+                                        .matcher(rawTrackTitle)
+                                        .replaceAll("")
+                                        .replaceAll("’", "'");
+
+                                return new AlbumTrack(t.number(), sanitisedTrackTitle);
+                            })
                             .toList();
 
                     next = new AlbumInfo(albumName, null, tracks, List.of(artistName));
