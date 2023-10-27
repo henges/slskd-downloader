@@ -10,6 +10,7 @@ import java.util.Map;
 public record ProcessorUserResult(
         String username,
         List<ProcessorFileResult> bestCandidates,
+        int uploadSpeed,
         double scoreOfBestCandidates,
         List<ProcessorDirectoryResultBuilder> directories
 ) {

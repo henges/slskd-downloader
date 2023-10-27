@@ -69,10 +69,11 @@ public class SlskdResponseProcessorTest extends AbstractProcessorTest {
 //                .filter(k -> k.equals("Ann Gore-Sunblind.json"))
                 .map(k -> processor.process(TEST_RESULT_DATA.get(k), TEST_REQUEST_DATA.get(k)))
                 // Find results where the best candidate doesn't have the right # of tracks
-                .filter(r -> !r.userResults().isEmpty() && r.userResults().getFirst().bestCandidates().size() == r.albumInfo().tracks().size())
+//                .filter(r -> !r.userResults().isEmpty() && r.userResults().getFirst().bestCandidates().size() < r.albumInfo().tracks().size())
                 // Find results where the best candidate has a score less than 1.0
-                .filter(r -> !r.userResults().isEmpty() && r.userResults().getFirst().scoreOfBestCandidates() < 1.0)
-                .sorted(Comparator.comparing(r -> r.userResults().getFirst().scoreOfBestCandidates()))
+//                .filter(r -> !r.userResults().isEmpty() && r.userResults().getFirst().scoreOfBestCandidates() < 1.0)
+                .filter(r -> !r.userResults().isEmpty())
+                .sorted(Comparator.comparing(r -> r.userResults().getFirst().scoreOfBestCandidates(), Comparator.reverseOrder()))
                 .forEach(res -> {
 
                     System.out.println(STR."For query \{res.albumInfo().searchString()}");
@@ -83,8 +84,8 @@ public class SlskdResponseProcessorTest extends AbstractProcessorTest {
                     System.out.println(STR."(\{res.albumInfo().tracks().size()} tracks total)");
                     if (res.userResults().isEmpty()) {
                         System.out.println("But there are no results for this query");
-                    } else for (int i = 0; i < 1 && i < res.userResults().size(); i++) {
-                        System.out.println(STR."Result \{i+1} for user \{res.userResults().get(i).username()}");
+                    } else for (int i = 0; i < 5 && i < res.userResults().size(); i++) {
+                        System.out.println(STR."Result \{i+1} for user \{res.userResults().get(i).username()} (upload speed \{PrintUtils.formatBytes(res.userResults().get(i).uploadSpeed())} MB/s)");
                         System.out.println(PrintUtils.printProcessorUserResult(res.userResults().get(i), res.albumInfo()));
                     }
                     System.out.println("##########################################################");

@@ -1,12 +1,14 @@
 package dev.polluxus.slskd_downloader.service;
 
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
+import dev.polluxus.slskd_downloader.client.slskd.response.SlskdGetDownloadResponse;
 import dev.polluxus.slskd_downloader.config.Config;
 import dev.polluxus.slskd_downloader.client.slskd.SlskdClient;
 import dev.polluxus.slskd_downloader.client.slskd.request.SlskdDownloadRequest;
 import dev.polluxus.slskd_downloader.client.slskd.response.SlskdSearchDetailResponse;
 import dev.polluxus.slskd_downloader.client.slskd.response.SlskdSearchStateResponse;
 import dev.polluxus.slskd_downloader.model.AlbumInfo;
+import dev.polluxus.slskd_downloader.model.UserAndFile;
 import dev.polluxus.slskd_downloader.util.FutureUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,7 +25,8 @@ public class SlskdService {
 
     // Package-private constants, may be used in tests
     static final int SEARCH_POOL_SIZE = 5;
-    static final int MAX_CONCURRENT_ACTIVE_DOWNLOADS = 10;
+    static final int MAX_CONCURRENT_ACTIVE_DOWNLOADS = 30;
+    static final int MAX_RETRIES = 10;
 
     private final SlskdClient client;
 
@@ -33,7 +36,11 @@ public class SlskdService {
 
     private final AtomicBoolean canDownload;
     private final Object canDownloadLock = new Object();
-    private final ScheduledExecutorService canDownloadExecutor;
+    private final ScheduledExecutorService downloadExecutor;
+    private final ExecutorService virtualThreadExecutor;
+
+    private List<SlskdGetDownloadResponse> downloadsList;
+    private final Map<String, Integer> retryCounts;
 
     public SlskdService(SlskdClient client) {
 
@@ -50,7 +57,10 @@ public class SlskdService {
                         (o1, o2) -> o2
                 ));
         this.canDownload = new AtomicBoolean(true);
-        this.canDownloadExecutor = new ScheduledThreadPoolExecutor(1);
+        this.downloadExecutor = new ScheduledThreadPoolExecutor(2);
+        this.downloadsList = new ArrayList<>();
+        this.retryCounts = new ConcurrentHashMap<>();
+        this.virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor();
     }
 
     public SlskdService(Config config) {
@@ -73,9 +83,10 @@ public class SlskdService {
         Runnable checkCanDownload = () -> {
             synchronized (canDownloadLock) {
                 final boolean oldValue = canDownload.get();
-                // Impose a maximum of 10 concurrent downloads from different users. This arbitrary number
+                // Impose a maximum of 30 concurrent downloads from different users. This arbitrary number
                 // is picked as a good candidate for saturating the connection.
-                final boolean newValue = client.getAllDownloads()
+                this.downloadsList = client.getAllDownloads();
+                final boolean newValue = downloadsList
                         .stream().filter(r -> r.directories().stream()
                                 .anyMatch(d -> d.files().stream()
                                         .anyMatch(f -> f.state().contains("InProgress"))))
@@ -88,10 +99,38 @@ public class SlskdService {
                 }
             }
         };
+        Runnable retryDownloads = () -> {
+            synchronized (canDownloadLock) {
+                this.downloadsList.stream()
+                        .flatMap(dr -> dr.directories().stream()
+                                .flatMap(d -> d.files().stream())
+                                .filter(f -> "Completed, Errored".equals(f.state()))
+                                .map(f -> new UserAndFile(dr.username(), f)))
+                        .collect(Collectors.groupingBy(UserAndFile::username))
+                        .forEach((u, fs) -> {
+
+                            final List<SlskdDownloadRequest> toRetry = new ArrayList<>();
+
+                            for (var fd: fs) {
+                                final int retryCount = retryCounts.computeIfAbsent(fd.asKey(), k -> 0);
+                                if (retryCount <= MAX_RETRIES) {
+                                    toRetry.add(new SlskdDownloadRequest(fd.file().filename(), fd.file().size()));
+                                    retryCounts.put(fd.asKey(), retryCount + 1);
+                                }
+                            }
+
+                            // Just dispatch the request, don't bother waiting for it.
+                            // But we do want to time it out before the next execution of this func.
+                            CompletableFuture.runAsync(() -> client.initiateDownloads(u, toRetry), virtualThreadExecutor)
+                                    .orTimeout(30000, TimeUnit.MILLISECONDS);
+                        });
+            }
+        };
         // Run it once inline, blocking the calling thread, to initialise 'can download' properly
         checkCanDownload.run();
         // Run all other invocations on the executor
-        canDownloadExecutor.scheduleAtFixedRate(checkCanDownload, 1000, 1000, TimeUnit.MILLISECONDS);
+        downloadExecutor.scheduleAtFixedRate(checkCanDownload, 1000, 1000, TimeUnit.MILLISECONDS);
+        downloadExecutor.scheduleAtFixedRate(retryDownloads, 60000, 60000, TimeUnit.MILLISECONDS);
         return this;
     }
 
@@ -182,12 +221,15 @@ public class SlskdService {
 
     public void shutdown() {
         this.searchPool.shutdownNow();
-        this.canDownloadExecutor.shutdownNow();
+        this.downloadExecutor.shutdownNow();
+        this.virtualThreadExecutor.shutdownNow();
         try {
             this.searchPool.awaitTermination(15000, TimeUnit.MILLISECONDS);
-            this.canDownloadExecutor.awaitTermination(15000, TimeUnit.MILLISECONDS);
+            this.downloadExecutor.awaitTermination(15000, TimeUnit.MILLISECONDS);
+            this.virtualThreadExecutor.awaitTermination(15000, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             log.error("Error terminating SlskdService worker pool", e);
+            throw new RuntimeException(e);
         }
     }
 }

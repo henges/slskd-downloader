@@ -33,9 +33,9 @@ public class SlskdResponseProcessor {
                 .filter(r -> !r.directories().isEmpty())
                 .map(r -> computeBestDirectories(r, albumInfo))
                 .map(r -> scoreUser(r, albumInfo))
-                .map(ProcessorUserResultBuilder::build)
                 .filter(ur -> !ur.directories().isEmpty())
-                .sorted(Comparator.comparing(ProcessorUserResult::scoreOfBestCandidates).reversed())
+                .map(ProcessorUserResultBuilder::build)
+                .sorted(USER_RESULT_COMPARATOR.reversed())
                 .toList());
     }
 
@@ -63,10 +63,11 @@ public class SlskdResponseProcessor {
 
         return ProcessorUserResultBuilder.builder()
                 .username(resp.originalData().username())
+                .uploadSpeed(resp.originalData().uploadSpeed())
                 .directories(directoryResults);
     }
 
-    private static final int MATCHED_TRACKS_POINTS = 50;
+    private static final int MATCHED_TRACKS_POINTS = 60;
     private static final int AVERAGE_SCORE_POINTS = 30;
     private static final int AVAILABLE_USER_POINTS = MATCHED_TRACKS_POINTS + AVERAGE_SCORE_POINTS;
 
@@ -141,7 +142,7 @@ public class SlskdResponseProcessor {
         
         final int sizePoints = builder.sizeOk() ? SIZE_POINTS : 0;
         final int formatPoints = builder.isTargetFormat() ? FORMAT_POINTS : 0;
-        // 1. Add 1 to the value so that log of distance 0 = 0 (log10(1) == 0.0)
+        // 1. Add 1 to the value so that log of distance 0 == 0 (log10(1) == 0.0)
         // 2. Take the smaller of the log and 1, so that negative points aren't awarded
         //     if the result is >1
         // 3. Subtract this value from 1 to find a scaling factor for the distance points
@@ -152,4 +153,18 @@ public class SlskdResponseProcessor {
         builder.score((float) (sizePoints + formatPoints + distancePoints) / AVAILABLE_FILE_POINTS);
         return builder;
     }
+
+    private static final Comparator<ProcessorUserResult> USER_RESULT_COMPARATOR = (u1, u2) -> {
+
+        // Round results to nearest 0.05 (0.94 -> 0.95, 0.96 -> 1.00...)
+        final double u1Score = Math.round(u1.scoreOfBestCandidates() * 20.00) / 20.00;
+        final double u2Score = Math.round(u2.scoreOfBestCandidates() * 20.00) / 20.00;
+        if (u1Score > u2Score) {
+            return 1;
+        } else if (u1Score < u2Score) {
+            return -1;
+        }
+        // If the rounded values are equal, compare upload speeds
+        return Integer.compare(u1.uploadSpeed(), u2.uploadSpeed());
+    };
 }

@@ -7,6 +7,11 @@ import java.util.Comparator;
 
 public class PrintUtils {
 
+    public static String formatBytes(final int bytes) {
+
+        return String.format("%.2f", bytes / (Math.pow(1024, 2)));
+    }
+
     public static String printProcessorUserResult(ProcessorUserResult r, AlbumInfo ai) {
 
         final StringBuilder sb = new StringBuilder();

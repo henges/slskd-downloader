@@ -10,7 +10,6 @@ import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.mapping;
 
-// TODO ARJ: better name!
 public record ProcessorInputUser(
         SlskdSearchDetailResponse originalData,
         List<ProcessorInputDirectory> directories

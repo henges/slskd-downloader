@@ -53,7 +53,7 @@ public class SlskdDownloader {
                 slskdService,
                 processor,
                 downloadProcessor,
-                (ai) -> ai.name().equalsIgnoreCase("Galaxy 2 Galaxy"));
+                (ai) -> ai.artists().stream().anyMatch(a -> a.equalsIgnoreCase("Iury Lech")));
         postComplete(results);
 
         downloadProcessor.stop();
@@ -103,7 +103,7 @@ public class SlskdDownloader {
         final List<AlbumInfo> explicitlySkipped = failures.getOrDefault(DownloadResult.EXPLICITLY_SKIPPED, List.of());
         if (!ok.isEmpty()) {
             log.info("The following downloads were submitted OK:");
-            triedAndFailed.forEach(ai -> log.info("\t{}", ai.searchString()));
+            ok.forEach(ai -> log.info("\t{}", ai.searchString()));
         }
         if (!triedAndFailed.isEmpty()) {
             log.info("The following searches were attempted, but failed to download correctly:");

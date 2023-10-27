@@ -28,7 +28,7 @@ public class UnattendedDecisionMaker implements DecisionMaker {
             return UserConfirmationResult.SKIP;
         }
 
-        if (res.scoreOfBestCandidates() == 1.0) {
+        if (res.scoreOfBestCandidates() >= 0.8) {
             log.info("Accepting result {} because score is 1.0", res);
             accepted.add(albumInfo);
             return UserConfirmationResult.YES;
