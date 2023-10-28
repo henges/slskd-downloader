@@ -29,4 +29,10 @@ public interface Config {
     double rateYourMusicMaxRating();
 
     Optional<String> blacklistedUsersFile();
+
+    Optional<String> plexBaseUrl();
+
+    Optional<String> plexToken();
+
+    Optional<String> plexLibrarySectionId();
 }

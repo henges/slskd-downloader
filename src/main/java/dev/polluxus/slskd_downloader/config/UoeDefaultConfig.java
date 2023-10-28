@@ -62,4 +62,24 @@ public abstract class UoeDefaultConfig implements Config {
     public double rateYourMusicMaxRating() {
         throw new UnsupportedOperationException();
     }
+
+    @Override
+    public Optional<String> blacklistedUsersFile() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Optional<String> plexBaseUrl() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Optional<String> plexToken() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Optional<String> plexLibrarySectionId() {
+        throw new UnsupportedOperationException();
+    }
 }

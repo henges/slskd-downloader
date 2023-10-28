@@ -2,6 +2,7 @@ package dev.polluxus.slskd_downloader;
 
 import au.com.muel.envconfig.EnvConfig;
 import com.fasterxml.jackson.core.type.TypeReference;
+import dev.polluxus.slskd_downloader.client.plex.PlexClient;
 import dev.polluxus.slskd_downloader.client.slskd.response.SlskdSearchDetailResponse;
 import dev.polluxus.slskd_downloader.config.Config;
 import dev.polluxus.slskd_downloader.decisionmaker.UnattendedDecisionMaker;
@@ -12,6 +13,7 @@ import dev.polluxus.slskd_downloader.processor.DownloadProcessor.DownloadResult;
 import dev.polluxus.slskd_downloader.processor.SlskdResponseProcessor;
 import dev.polluxus.slskd_downloader.processor.matcher.MatchStrategyType;
 import dev.polluxus.slskd_downloader.processor.model.output.ProcessorSearchResult;
+import dev.polluxus.slskd_downloader.service.DeduplicatorService;
 import dev.polluxus.slskd_downloader.service.SlskdService;
 import dev.polluxus.slskd_downloader.store.FileBackedStore;
 import dev.polluxus.slskd_downloader.store.Store;
@@ -46,6 +48,7 @@ public class SlskdDownloader {
         final Iterator<AlbumInfo> supplier = AlbumInfoSupplier.from(config);
 
         final SlskdResponseProcessor processor = SlskdResponseProcessor.from(config, MatchStrategyType.EDIT_DISTANCE);
+        final DeduplicatorService deduplicatorService = new DeduplicatorService(PlexClient.from(config));
         final DownloadProcessor downloadProcessor = new DownloadProcessor(slskdService, new UnattendedDecisionMaker());
 
         Map<AlbumInfo, CompletableFuture<DownloadResult>> results = pipeline(
@@ -53,7 +56,7 @@ public class SlskdDownloader {
                 slskdService,
                 processor,
                 downloadProcessor,
-                (ai) -> ai.artists().stream().anyMatch(a -> a.equalsIgnoreCase("Iury Lech")));
+                deduplicatorService::shouldDownload);
         postComplete(results);
 
         downloadProcessor.stop();
@@ -65,19 +68,14 @@ public class SlskdDownloader {
                                 SlskdService service,
                                 SlskdResponseProcessor processor,
                                 Function<ProcessorSearchResult, CompletableFuture<DownloadResult>> consumer,
-                                Predicate<AlbumInfo> skipUntil) {
+                                Predicate<AlbumInfo> shouldDownload) {
 
         final Map<AlbumInfo, CompletableFuture<DownloadResult>> allRequests = new HashMap<>();
-        boolean skipping = true;
         while (albumInfos.hasNext()) {
-            final AlbumInfo ai = albumInfos.next();
-            // Skip until the predicate returns true
-            if (skipping) {
-                skipping = !skipUntil.test(ai);
-                if (skipping) {
-                    log.info(STR."Skipping entry \{ai.searchString()} because it doesn't match the predicate");
-                    continue;
-                }
+            var ai = albumInfos.next();
+            if (!shouldDownload.test(ai)) {
+                log.info("Skipping download request {}", ai.searchString());
+                continue;
             }
             final var doneFuture = service.search(ai)
                     .thenApply(l -> processor.process(l, ai))
