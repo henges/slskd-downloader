@@ -4,7 +4,16 @@
 <configuration>
     <import class="ch.qos.logback.classic.encoder.PatternLayoutEncoder"/>
     <import class="ch.qos.logback.core.ConsoleAppender"/>
-    <import class="ch.qos.logback.core.rolling.RollingFileAppender"/>
+    <import class="ch.qos.logback.core.FileAppender"/>
+
+    <property name="LOG_DIR" value="C:\Users\alexa\code\slskd-downloader\log" />
+    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+        <file>${LOG_DIR}\slskd-downloader.log</file>
+        <append>true</append>
+        <encoder class="PatternLayoutEncoder">
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} -%kvp- %msg%n</pattern>
+        </encoder>
+    </appender>
 
     <appender name="STDOUT" class="ConsoleAppender">
         <encoder class="PatternLayoutEncoder">
@@ -17,5 +26,6 @@
 
     <root level="debug">
         <appender-ref ref="STDOUT"/>
+        <appender-ref ref="FILE"/>
     </root>
 </configuration>

@@ -49,6 +49,7 @@ public class SlskdService {
         this.searchQueue = new ArrayList<>(SEARCH_POOL_SIZE);
         this.allSearchStates = client.getAllSearchStates()
                 .stream()
+                .filter(ssr -> false)
                 .collect(Collectors.toMap(
                         SlskdSearchStateResponse::searchText,
                         Function.identity(),
@@ -67,18 +68,61 @@ public class SlskdService {
         this(SlskdClient.create(config));
     }
 
-    private boolean started = false;
+    private boolean startedDownloadPoll = false;
+    private boolean startedRetrier = false;
 
-    /**
-     * Allows starting the service separately to instantiation
-     * @return this object (for chaining)
-     */
-    @CanIgnoreReturnValue
-    public SlskdService start() {
-        if (started) {
+    public SlskdService startRetrier(boolean runImmediately) {
+        if (startedRetrier) {
             return this;
         }
-        started = true;
+        startedRetrier = true;
+
+        Runnable retryDownloads = () -> {
+
+            log.info("Beginning scheduled retry");
+
+            synchronized (canDownloadLock) {
+                this.downloadsList.stream()
+                        .flatMap(dr -> dr.directories().stream()
+                                .flatMap(d -> d.files().stream())
+                                .filter(f -> "Completed, Errored".equals(f.state()))
+                                .map(f -> new UserAndFile(dr.username(), f)))
+                        .collect(Collectors.groupingBy(UserAndFile::username))
+                        .forEach((u, fs) -> {
+
+                            final List<SlskdDownloadRequest> toRetry = new ArrayList<>();
+
+                            for (var fd: fs) {
+                                final int retryCount = retryCounts.computeIfAbsent(fd.asKey(), k -> 0);
+                                if (retryCount <= MAX_RETRIES) {
+                                    toRetry.add(new SlskdDownloadRequest(fd.file().filename(), fd.file().size()));
+                                    retryCounts.put(fd.asKey(), retryCount + 1);
+                                } else {
+                                    log.info("Skipping {} from user {} because it exceeded the retry limit",
+                                            fd.file().filename(), fd.username());
+                                }
+                            }
+
+                            // Just dispatch the request, don't bother waiting for it.
+                            // But we do want to time it out before the next execution of this func.
+                            CompletableFuture.runAsync(() -> client.initiateDownloads(u, toRetry), virtualThreadExecutor)
+                                    .orTimeout(30000, TimeUnit.MILLISECONDS);
+                        });
+            }
+        };
+        if (runImmediately) {
+            retryDownloads.run();
+        }
+        downloadExecutor.scheduleAtFixedRate(retryDownloads, 300000, 300000, TimeUnit.MILLISECONDS);
+        return this;
+    }
+
+    @CanIgnoreReturnValue
+    public SlskdService startDownloadPoll() {
+        if (startedDownloadPoll) {
+            return this;
+        }
+        startedDownloadPoll = true;
 
         Runnable checkCanDownload = () -> {
             synchronized (canDownloadLock) {
@@ -99,38 +143,21 @@ public class SlskdService {
                 }
             }
         };
-        Runnable retryDownloads = () -> {
-            synchronized (canDownloadLock) {
-                this.downloadsList.stream()
-                        .flatMap(dr -> dr.directories().stream()
-                                .flatMap(d -> d.files().stream())
-                                .filter(f -> "Completed, Errored".equals(f.state()))
-                                .map(f -> new UserAndFile(dr.username(), f)))
-                        .collect(Collectors.groupingBy(UserAndFile::username))
-                        .forEach((u, fs) -> {
-
-                            final List<SlskdDownloadRequest> toRetry = new ArrayList<>();
-
-                            for (var fd: fs) {
-                                final int retryCount = retryCounts.computeIfAbsent(fd.asKey(), k -> 0);
-                                if (retryCount <= MAX_RETRIES) {
-                                    toRetry.add(new SlskdDownloadRequest(fd.file().filename(), fd.file().size()));
-                                    retryCounts.put(fd.asKey(), retryCount + 1);
-                                }
-                            }
-
-                            // Just dispatch the request, don't bother waiting for it.
-                            // But we do want to time it out before the next execution of this func.
-                            CompletableFuture.runAsync(() -> client.initiateDownloads(u, toRetry), virtualThreadExecutor)
-                                    .orTimeout(30000, TimeUnit.MILLISECONDS);
-                        });
-            }
-        };
         // Run it once inline, blocking the calling thread, to initialise 'can download' properly
         checkCanDownload.run();
         // Run all other invocations on the executor
         downloadExecutor.scheduleAtFixedRate(checkCanDownload, 1000, 1000, TimeUnit.MILLISECONDS);
-        downloadExecutor.scheduleAtFixedRate(retryDownloads, 60000, 60000, TimeUnit.MILLISECONDS);
+        return this;
+    }
+
+    /**
+     * Allows starting the service separately to instantiation
+     * @return this object (for chaining)
+     */
+    public SlskdService start() {
+
+        startDownloadPoll();
+        startRetrier(false);
         return this;
     }
 

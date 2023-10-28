@@ -8,6 +8,6 @@ public record UserAndFile(String username, SlskdDownloadFileResponse file) {
 
     public String asKey() {
 
-        return STR."\{username}~\{file.id()}";
+        return STR."\{username}~\{file.filename()}";
     }
 }

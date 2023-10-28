@@ -104,6 +104,8 @@ public class SlskdClient extends AbstractHttpClient {
 
     public List<SlskdSearchStateResponse> getAllSearchStates() {
 
+        log.info("Getting all search states from Slskd");
+
         ensureAuthValid();
         final var req = ClassicRequestBuilder.get(baseUrl + API_PREFIX + "/searches")
                 .addHeader("Authorization", token.headerValue())

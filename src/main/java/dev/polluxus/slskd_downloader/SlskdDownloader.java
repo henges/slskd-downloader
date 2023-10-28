@@ -21,6 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
@@ -36,6 +37,8 @@ public class SlskdDownloader {
     private static final Logger log = LoggerFactory.getLogger(SlskdDownloader.class);
 
     public static void main(String[] args) {
+
+        log.info("slskd-downloader started at {}", LocalDateTime.now());
 
         final Config config = EnvConfig.fromEnv(Config.class);
 
@@ -70,6 +73,7 @@ public class SlskdDownloader {
                                 Function<ProcessorSearchResult, CompletableFuture<DownloadResult>> consumer,
                                 Predicate<AlbumInfo> shouldDownload) {
 
+        log.info("Beginning iteration of album information");
         final Map<AlbumInfo, CompletableFuture<DownloadResult>> allRequests = new HashMap<>();
         while (albumInfos.hasNext()) {
             var ai = albumInfos.next();

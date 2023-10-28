@@ -75,7 +75,7 @@ public class DownloadProcessor implements Function<ProcessorSearchResult, Comple
         return CompletableFuture.runAsync(() -> {
 
             if (res.userResults().isEmpty()) {
-                log.info("No good results for this query :\\");
+                log.info("No good results for query {}", res.albumInfo().searchString());
                 return;
             }
 

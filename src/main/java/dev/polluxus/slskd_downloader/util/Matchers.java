@@ -20,9 +20,9 @@ public class Matchers {
     public static final LevenshteinDistance LEVENSHTEIN_DISTANCE_4 = new LevenshteinDistance(4);
     public static final LevenshteinDistance LEVENSHTEIN_DISTANCE_8 = new LevenshteinDistance(8);
 
-    public static LevenshteinDistance getEditDistanceFunc(final String trackName) {
+    public static LevenshteinDistance getEditDistanceFunc(final String name) {
 
-        final int length = trackName.length();
+        final int length = name.length();
         if (length <= 6) {
             return LEVENSHTEIN_DISTANCE_1;
         } else if (length <= 22) {
