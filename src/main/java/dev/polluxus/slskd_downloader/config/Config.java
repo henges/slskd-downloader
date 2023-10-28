@@ -27,4 +27,6 @@ public interface Config {
 
     @EnvVar(defaultValue = "5.0")
     double rateYourMusicMaxRating();
+
+    Optional<String> blacklistedUsersFile();
 }

@@ -45,7 +45,7 @@ public class SlskdDownloader {
         final SlskdService slskdService = new SlskdService(config).start();
         final Iterator<AlbumInfo> supplier = AlbumInfoSupplier.from(config);
 
-        final SlskdResponseProcessor processor = new SlskdResponseProcessor(MatchStrategyType.EDIT_DISTANCE);
+        final SlskdResponseProcessor processor = SlskdResponseProcessor.from(config, MatchStrategyType.EDIT_DISTANCE);
         final DownloadProcessor downloadProcessor = new DownloadProcessor(slskdService, new UnattendedDecisionMaker());
 
         Map<AlbumInfo, CompletableFuture<DownloadResult>> results = pipeline(

@@ -1,7 +1,10 @@
 package dev.polluxus.slskd_downloader.processor;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import dev.polluxus.slskd_downloader.client.slskd.response.SlskdSearchDetailResponse;
+import dev.polluxus.slskd_downloader.config.Config;
+import dev.polluxus.slskd_downloader.config.JacksonConfig;
 import dev.polluxus.slskd_downloader.model.AlbumInfo;
 import dev.polluxus.slskd_downloader.model.AlbumInfo.AlbumTrack;
 import dev.polluxus.slskd_downloader.processor.matcher.MatchStrategyType;
@@ -10,6 +13,10 @@ import dev.polluxus.slskd_downloader.processor.model.output.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -20,15 +27,39 @@ public class SlskdResponseProcessor {
     private static final Logger log = LoggerFactory.getLogger(SlskdResponseProcessor.class);
 
     private final MatchStrategyType matchStrategy;
+    private final Set<String> blacklistedUsers;
 
     public SlskdResponseProcessor(MatchStrategyType matchStrategy) {
         this.matchStrategy = matchStrategy;
+        this.blacklistedUsers = Set.of();
+    }
+
+    public SlskdResponseProcessor(MatchStrategyType matchStrategy, Set<String> blacklistedUsers) {
+        this.matchStrategy = matchStrategy;
+        this.blacklistedUsers = blacklistedUsers;
+    }
+
+    public static SlskdResponseProcessor from(Config config, MatchStrategyType matchStrategy) {
+
+        final Set<String> blacklistedUsers;
+        if (config.blacklistedUsersFile().isPresent()) {
+            try {
+                blacklistedUsers = JacksonConfig.MAPPER.readValue(
+                        Path.of(config.blacklistedUsersFile().get()).toFile(), new TypeReference<>() {});
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        } else {
+            blacklistedUsers = Set.of();
+        }
+        return new SlskdResponseProcessor(matchStrategy, blacklistedUsers);
     }
 
     public ProcessorSearchResult process(List<SlskdSearchDetailResponse> resps, AlbumInfo albumInfo) {
 
         return new ProcessorSearchResult(albumInfo, resps.stream()
                 .map(ProcessorInputUser::convert)
+                .filter(r -> !blacklistedUsers.contains(r.originalData().username()))
                 .map(r -> findMatches(r, albumInfo))
                 .filter(r -> !r.directories().isEmpty())
                 .map(r -> computeBestDirectories(r, albumInfo))
@@ -40,10 +71,6 @@ public class SlskdResponseProcessor {
     }
 
     private ProcessorUserResultBuilder findMatches(ProcessorInputUser resp, AlbumInfo albumInfo) {
-
-//        if (resp.originalData().username().equals("Shokyy")) {
-//            System.out.println();
-//        }
 
         final List<ProcessorDirectoryResultBuilder> directoryResults = resp.directories().stream()
                 .map(d -> {

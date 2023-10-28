@@ -19,3 +19,4 @@ target
 
 src/test/resources/requests
 src/test/resources/responses
+blacklisted-users.json
