@@ -54,17 +54,18 @@ public class SlskdDownloader {
 
         final SlskdResponseProcessor processor = SlskdResponseProcessor.from(config, MatchStrategyType.EDIT_DISTANCE);
         final DeduplicatorService deduplicatorService = new DeduplicatorService(PlexClient.from(config));
-        final DownloadProcessor downloadProcessor = new DownloadProcessor(slskdService, new UnattendedDecisionMaker());
+//        final DownloadProcessor downloadProcessor = new DownloadProcessor(slskdService, new UnattendedDecisionMaker());
 
         Map<AlbumInfo, CompletableFuture<DownloadResult>> results = pipeline(
                 supplier,
                 slskdService,
                 processor,
                 () -> new ActiveDownloadProcessor(slskdService),
-                deduplicatorService::shouldDownload);
+                deduplicatorService::shouldDownload,
+                (ai) -> !ai.name().equals("World Domination"));
         postComplete(results);
 
-        downloadProcessor.stop();
+//        downloadProcessor.stop();
         slskdService.shutdown();
     }
 
@@ -73,12 +74,18 @@ public class SlskdDownloader {
                                 SlskdService service,
                                 SlskdResponseProcessor processor,
                                 Supplier<Function<ProcessorSearchResult, CompletableFuture<DownloadResult>>> consumer,
-                                Predicate<AlbumInfo> shouldDownload) {
+                                Predicate<AlbumInfo> shouldDownload,
+                                Predicate<AlbumInfo> skipWhile) {
 
         log.info("Beginning iteration of album information");
         final Map<AlbumInfo, CompletableFuture<DownloadResult>> allRequests = new HashMap<>();
+        boolean skipping = true;
         while (albumInfos.hasNext()) {
             var ai = albumInfos.next();
+            if (skipping && (skipping = skipWhile.test(ai))) {
+                log.info("Skipping download request {} because it didn't match the predicate", ai.searchString());
+                continue;
+            }
             if (!shouldDownload.test(ai)) {
                 log.info("Skipping download request {}", ai.searchString());
                 continue;

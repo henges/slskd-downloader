@@ -150,7 +150,7 @@ public class SlskdService {
                     canDownloadLock.notifyAll();
                 }
             }
-            if (pollCount++ % 5 != 0) {
+            if (pollCount++ % 10 != 0) {
                 return;
             }
             Set<DownloadSubscription> allSubs = subscriptions.values().stream().flatMap(Collection::stream).collect(Collectors.toSet());
@@ -276,10 +276,10 @@ public class SlskdService {
     }
 
     public void initiateAndSubscribe(final String hostUser, final List<SlskdDownloadRequest> files, Consumer<List<SlskdDownloadFileResponse>> onUpdate) {
-
+        // Wait for the download to be initiated before we subscribe, because initiateDownloads might block
+        initiateDownloads(hostUser, files);
         subscriptions.computeIfAbsent(hostUser, k -> ConcurrentHashMap.newKeySet())
                 .add(new DownloadSubscription(files.stream().map(SlskdDownloadRequest::filename).collect(Collectors.toSet()), onUpdate));
-        initiateDownloads(hostUser, files);
     }
 
     public void unsubscribe(final String hostUser, final List<SlskdDownloadRequest> files, Consumer<List<SlskdDownloadFileResponse>> onUpdate) {

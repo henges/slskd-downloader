@@ -107,7 +107,7 @@ public class SlskdClient extends AbstractHttpClient {
         log.info("Getting all search states from Slskd");
 
         ensureAuthValid();
-        final var req = ClassicRequestBuilder.get(baseUrl + API_PREFIX + "/searches")
+        final var req = ClassicRequestBuilder.get(STR."\{baseUrl}\{API_PREFIX}/searches")
                 .addHeader("Authorization", token.headerValue())
                 .build();
         return doRequest(req, new TypeReference<>() {});
@@ -116,7 +116,7 @@ public class SlskdClient extends AbstractHttpClient {
     public SlskdSearchStateResponse getSearchState(UUID id) {
 
         ensureAuthValid();
-        final var req = ClassicRequestBuilder.get(baseUrl + API_PREFIX + "/searches/" + id)
+        final var req = ClassicRequestBuilder.get(STR."\{baseUrl}\{API_PREFIX}/searches/\{id}")
                 .addHeader("Authorization", token.headerValue())
                 .build();
         return doRequest(req, SlskdSearchStateResponse.class);
@@ -125,7 +125,7 @@ public class SlskdClient extends AbstractHttpClient {
     public List<SlskdSearchDetailResponse> getSearchResponses(UUID id) {
 
         ensureAuthValid();
-        final var req = ClassicRequestBuilder.get(baseUrl + API_PREFIX + "/searches/" + id + "/responses")
+        final var req = ClassicRequestBuilder.get(STR."\{baseUrl}\{API_PREFIX}/searches/\{id}/responses")
                 .addHeader("Authorization", token.headerValue())
                 .build();
         return doRequest(req, new TypeReference<>() {});
@@ -134,7 +134,7 @@ public class SlskdClient extends AbstractHttpClient {
     public List<SlskdGetDownloadResponse> getAllDownloads() {
 
         ensureAuthValid();
-        final var req = ClassicRequestBuilder.get(baseUrl + API_PREFIX + "/transfers/downloads")
+        final var req = ClassicRequestBuilder.get(STR."\{baseUrl}\{API_PREFIX}/transfers/downloads")
                 .addHeader("Authorization", token.headerValue())
                 .build();
         return doRequest(req, new TypeReference<>() {});
@@ -143,7 +143,7 @@ public class SlskdClient extends AbstractHttpClient {
     public SlskdSearchStateResponse search(String searchText) {
 
         ensureAuthValid();
-        final var req = ClassicRequestBuilder.post(baseUrl + API_PREFIX + "/searches")
+        final var req = ClassicRequestBuilder.post(STR."\{baseUrl}\{API_PREFIX}/searches")
                 .addHeader("Authorization", token.headerValue())
                 .setEntity(writeValueAsBytesUnchecked(new SlskdSearchRequest(searchText)), ContentType.APPLICATION_JSON)
                 .build();
@@ -153,7 +153,7 @@ public class SlskdClient extends AbstractHttpClient {
     public void initiateDownloads(final String hostUser, final List<SlskdDownloadRequest> files) {
 
         ensureAuthValid();
-        final var req = ClassicRequestBuilder.post(baseUrl + API_PREFIX + "/transfers/downloads/" + hostUser)
+        final var req = ClassicRequestBuilder.post(STR."\{baseUrl}\{API_PREFIX}/transfers/downloads/\{hostUser}")
                 .addHeader("Authorization", token.headerValue())
                 .setEntity(writeValueAsBytesUnchecked(files), ContentType.APPLICATION_JSON)
                 .build();
@@ -172,7 +172,7 @@ public class SlskdClient extends AbstractHttpClient {
 
     private SlskdLoginResponse login() {
 
-        final var req = ClassicRequestBuilder.post(baseUrl + API_PREFIX + "/session")
+        final var req = ClassicRequestBuilder.post(STR."\{baseUrl}\{API_PREFIX}/session")
                 .setEntity(writeValueAsBytesUnchecked(new SlskdLoginRequest(username, password)), ContentType.APPLICATION_JSON)
                 .build();
         return doRequest(req, SlskdLoginResponse.class);

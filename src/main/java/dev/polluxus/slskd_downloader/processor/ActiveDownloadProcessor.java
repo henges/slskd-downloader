@@ -46,6 +46,8 @@ public class ActiveDownloadProcessor implements Function<ProcessorSearchResult, 
         private final ProcessorUserResult target;
         private int failureCount = 0;
         private int timesWhereEmpty = 0;
+        private int timesWhereStale = 0;
+        private Map<String, SlskdDownloadFileResponse> lastKnownState = Map.of();
 
         public DownloadTracker(ProcessorUserResult target) {
             this.target = target;
@@ -66,6 +68,10 @@ public class ActiveDownloadProcessor implements Function<ProcessorSearchResult, 
             try {
                 onUpdateBody(files);
             } finally {
+                this.tracker.lastKnownState = files.stream().collect(Collectors.toMap(
+                        SlskdDownloadFileResponse::filename,
+                        Function.identity()
+                ));
                 locked = false;
             }
         };
@@ -92,9 +98,10 @@ public class ActiveDownloadProcessor implements Function<ProcessorSearchResult, 
                 log.warn("Outcome for download result {} of search {}: was empty for too long", this.position, this.albumInfo.searchString());
                 this.unsubscribe();
                 this.process();
-                return;
             }
+            return;
         }
+        current.timesWhereEmpty = 0;
 
         // If every file completed OK, then we are done, yippee!!
         if (files.stream().allMatch(dfr -> "Completed, Succeeded".equals(dfr.state()))) {
@@ -104,8 +111,29 @@ public class ActiveDownloadProcessor implements Function<ProcessorSearchResult, 
             return;
         }
 
-        // If any files are in progress, we don't need to do anything, just keep waiting!
-        if (files.stream().anyMatch(dfr -> "InProgress".equals(dfr.state()))) {
+        final var inProgress = files.stream().filter(dfr -> "InProgress".equals(dfr.state())).collect(Collectors.toMap(
+                SlskdDownloadFileResponse::filename,
+                Function.identity()
+        ));
+
+        // If any files are in progress, check whether they are actually progressing...
+        if (!inProgress.isEmpty()) {
+            final boolean hasProgressed = inProgress.entrySet().stream().anyMatch(e -> {
+                final SlskdDownloadFileResponse previous = current.lastKnownState.get(e.getKey());
+                return previous != null && previous.bytesTransferred() < e.getValue().bytesTransferred();
+            });
+            if (!hasProgressed) {
+                // If it's been more than 6 polls (60 seconds) since we saw any file progress,
+                // cancel the download and try the next result
+                if (++current.timesWhereStale >= 6) {
+                    this.unsubscribe();
+                    this.cancelAll(hostUser, files.stream().map(SlskdDownloadFileResponse::id).toList());
+                    this.process();
+                    return;
+                }
+            } else {
+                current.timesWhereStale = 0;
+            }
             log.info("Outcome for download result {} of search {}: still in progress and looking good", this.position, this.albumInfo.searchString());
             return;
         }
@@ -126,6 +154,7 @@ public class ActiveDownloadProcessor implements Function<ProcessorSearchResult, 
                     .toList();
             cancelAndRemoveAll(hostUser, transfersToRemove);
             log.info("Outcome for download result {} of search {}: removed {} duplicate transfers", this.position, this.albumInfo.searchString(), transfersToRemove.size());
+            // We'll continue with e.g. retrying failures on the next poll
             return;
         }
 
