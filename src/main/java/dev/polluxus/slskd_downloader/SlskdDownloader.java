@@ -62,7 +62,7 @@ public class SlskdDownloader {
                 processor,
                 () -> new ActiveDownloadProcessor(slskdService),
                 deduplicatorService::shouldDownload,
-                (ai) -> !ai.name().equals("World Domination"));
+                (ai) -> false);
         postComplete(results);
 
 //        downloadProcessor.stop();

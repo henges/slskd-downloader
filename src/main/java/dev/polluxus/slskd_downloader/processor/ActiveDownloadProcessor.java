@@ -1,6 +1,7 @@
 package dev.polluxus.slskd_downloader.processor;
 
 import dev.polluxus.slskd_downloader.client.slskd.request.SlskdDownloadRequest;
+import dev.polluxus.slskd_downloader.client.slskd.response.SlskdGetDownloadResponse;
 import dev.polluxus.slskd_downloader.client.slskd.response.SlskdGetDownloadResponse.SlskdDownloadFileResponse;
 import dev.polluxus.slskd_downloader.config.ThreadPoolConfig;
 import dev.polluxus.slskd_downloader.model.AlbumInfo;
@@ -13,6 +14,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -40,13 +42,14 @@ public class ActiveDownloadProcessor implements Function<ProcessorSearchResult, 
      * </pre>
      * returns false, we therefore must maintain a reference to only a single instance of this function.
      */
-    private final Consumer<List<SlskdDownloadFileResponse>> onUpdate;
+    private final BiConsumer<List<SlskdDownloadFileResponse>, SlskdGetDownloadResponse> onUpdate;
 
     private static class DownloadTracker {
         private final ProcessorUserResult target;
         private int failureCount = 0;
         private int timesWhereEmpty = 0;
         private int timesWhereStale = 0;
+        private int timesWhereIdle = 0;
         private Map<String, SlskdDownloadFileResponse> lastKnownState = Map.of();
 
         public DownloadTracker(ProcessorUserResult target) {
@@ -59,31 +62,30 @@ public class ActiveDownloadProcessor implements Function<ProcessorSearchResult, 
         this.position = 0;
         this.slskdService = slskdService;
         this.locked = false;
-        this.onUpdate = (files) -> {
+        this.onUpdate = (files, allFilesForUser) -> {
             if (locked) {
                 return;
             }
 
             locked = true;
             try {
-                onUpdateBody(files);
+                onUpdateBody(files, allFilesForUser);
             } finally {
-                this.tracker.lastKnownState = files.stream().collect(Collectors.toMap(
-                        SlskdDownloadFileResponse::filename,
-                        Function.identity()
-                ));
+                if (this.tracker != null) {
+                    this.tracker.lastKnownState = files.stream()
+                            .collect(Collectors.toMap(SlskdDownloadFileResponse::filename, Function.identity()));
+                }
                 locked = false;
             }
         };
     }
 
-    private void onUpdateBody(List<SlskdDownloadFileResponse> files) {
+    private void onUpdateBody(List<SlskdDownloadFileResponse> files, SlskdGetDownloadResponse allFilesForUser) {
 
         DownloadTracker current = this.tracker;
 
         if (current == null) {
             log.warn("Outcome for download result {} of search {}: tracker gone!", this.position, this.albumInfo.searchString());
-            this.unsubscribe();
             this.process();
             return;
         }
@@ -141,6 +143,7 @@ public class ActiveDownloadProcessor implements Function<ProcessorSearchResult, 
         if (files.size() > albumInfo.tracks().size()) {
             log.info("Looks like there may have been a duplicate transfer request created for download for {} from user {}... Going to deduplicate them",
                     albumInfo.searchString(), hostUser);
+            // Cancel all but one of the transfers that have more than one match.
             final var transfersToRemove = files.stream()
                     // Group them by filename
                     .collect(Collectors.groupingBy(SlskdDownloadFileResponse::filename))
@@ -159,13 +162,34 @@ public class ActiveDownloadProcessor implements Function<ProcessorSearchResult, 
         }
 
         // Find all the failed files
-        var failures = files.stream().filter(dfr -> "Completed, Errored".equals(dfr.state())).toList();
+        var failures = files.stream().filter(dfr -> "Completed, Errored".equals(dfr.state()) || "Completed, TimedOut".equals(dfr.state())).toList();
+        final boolean anyInProgress = allFilesForUser.directories().stream().flatMap(r -> r.files().stream()).anyMatch(dfr -> dfr.state().equals("InProgress"));
 
         if (failures.isEmpty()) {
-            log.info("Outcome for download result {} of search {}: enqueued...", this.position, this.albumInfo.searchString());
+            // We haven't got any error-failures, and we also haven't got any active downloads for this request.
+            // Do we have _any_ active downloads with this user (eg for another request) or are we just waiting in their queue?
+            if (!anyInProgress) {
+                // TODO: it would ideally be configurable whether you actually do anything about this. Some users might be fine
+                //   with waiting.
+                if (++current.timesWhereIdle >= 12) {
+                    log.warn("Outcome for download result {} of search {}: aborting due to excessive queueing times",
+                            this.position, this.albumInfo.searchString());
+                    this.unsubscribe();
+                    this.cancelAndRemoveAll(hostUser, files.stream().map(SlskdDownloadFileResponse::id).toList());
+                    this.process();
+                    return;
+                }
+            }
+            log.info("Outcome for download result {} of search {}: enqueued (other DLs from user in progress? {})...",
+                    this.position, this.albumInfo.searchString(), anyInProgress ? "yes" : "no");
             return;
         }
 
+        // There are some failures, but we have downloads with the user elsewhere in progress
+        if (anyInProgress) {
+            log.info("Outcome for download result {} of search {}: other downloads taking priority for now", this.position, this.albumInfo.searchString());
+            return;
+        }
         // If we're over the failure threshold, unsubscribe, cancel these downloads, and proceed with the next result
         current.failureCount += failures.size();
         if (current.failureCount / files.size() >= 10) {

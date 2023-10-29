@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -150,6 +151,7 @@ public class SlskdService {
                     canDownloadLock.notifyAll();
                 }
             }
+
             if (pollCount++ % 10 != 0) {
                 return;
             }
@@ -179,10 +181,11 @@ public class SlskdService {
                                 }
                             }
                         });
-                subArgs.forEach((sub, args) -> CompletableFuture.runAsync(() -> sub.callback().accept(args), virtualThreadExecutor));
+                subArgs.forEach((sub, args) -> CompletableFuture.runAsync(() -> sub.callback().accept(args, gdr), virtualThreadExecutor));
             });
-            // Call the remaining ones with an empty list
-            allSubs.forEach((sub) -> CompletableFuture.runAsync(() -> sub.callback().accept(List.of()), virtualThreadExecutor));
+            // Call the remaining ones with empty params
+            allSubs.forEach((sub) -> CompletableFuture.runAsync(() -> sub.callback().accept(List.of(),
+                    new SlskdGetDownloadResponse("unknown", List.of())), virtualThreadExecutor));
         };
         // Run it once inline, blocking the calling thread, to initialise 'can download' properly
         checkCanDownload.run();
@@ -275,14 +278,14 @@ public class SlskdService {
         }
     }
 
-    public void initiateAndSubscribe(final String hostUser, final List<SlskdDownloadRequest> files, Consumer<List<SlskdDownloadFileResponse>> onUpdate) {
+    public void initiateAndSubscribe(final String hostUser, final List<SlskdDownloadRequest> files, BiConsumer<List<SlskdDownloadFileResponse>, SlskdGetDownloadResponse> onUpdate) {
         // Wait for the download to be initiated before we subscribe, because initiateDownloads might block
         initiateDownloads(hostUser, files);
         subscriptions.computeIfAbsent(hostUser, k -> ConcurrentHashMap.newKeySet())
                 .add(new DownloadSubscription(files.stream().map(SlskdDownloadRequest::filename).collect(Collectors.toSet()), onUpdate));
     }
 
-    public void unsubscribe(final String hostUser, final List<SlskdDownloadRequest> files, Consumer<List<SlskdDownloadFileResponse>> onUpdate) {
+    public void unsubscribe(final String hostUser, final List<SlskdDownloadRequest> files, BiConsumer<List<SlskdDownloadFileResponse>, SlskdGetDownloadResponse> onUpdate) {
 
         subscriptions.computeIfAbsent(hostUser, k -> ConcurrentHashMap.newKeySet())
                 .remove(new DownloadSubscription(files.stream().map(SlskdDownloadRequest::filename).collect(Collectors.toSet()), onUpdate));
@@ -319,5 +322,5 @@ public class SlskdService {
         }
     }
 
-    private record DownloadSubscription(Set<String> filenames, Consumer<List<SlskdDownloadFileResponse>> callback) { }
+    private record DownloadSubscription(Set<String> filenames, BiConsumer<List<SlskdDownloadFileResponse>, SlskdGetDownloadResponse> callback) { }
 }
