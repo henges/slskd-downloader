@@ -8,6 +8,7 @@ import dev.polluxus.slskd_downloader.config.Config;
 import dev.polluxus.slskd_downloader.decisionmaker.UnattendedDecisionMaker;
 import dev.polluxus.slskd_downloader.infosupplier.AlbumInfoSupplier;
 import dev.polluxus.slskd_downloader.model.AlbumInfo;
+import dev.polluxus.slskd_downloader.processor.ActiveDownloadProcessor;
 import dev.polluxus.slskd_downloader.processor.DownloadProcessor;
 import dev.polluxus.slskd_downloader.processor.DownloadProcessor.DownloadResult;
 import dev.polluxus.slskd_downloader.processor.SlskdResponseProcessor;
@@ -27,6 +28,7 @@ import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.mapping;
@@ -58,7 +60,7 @@ public class SlskdDownloader {
                 supplier,
                 slskdService,
                 processor,
-                downloadProcessor,
+                () -> new ActiveDownloadProcessor(slskdService),
                 deduplicatorService::shouldDownload);
         postComplete(results);
 
@@ -70,7 +72,7 @@ public class SlskdDownloader {
                                 Iterator<AlbumInfo> albumInfos,
                                 SlskdService service,
                                 SlskdResponseProcessor processor,
-                                Function<ProcessorSearchResult, CompletableFuture<DownloadResult>> consumer,
+                                Supplier<Function<ProcessorSearchResult, CompletableFuture<DownloadResult>>> consumer,
                                 Predicate<AlbumInfo> shouldDownload) {
 
         log.info("Beginning iteration of album information");
@@ -83,7 +85,7 @@ public class SlskdDownloader {
             }
             final var doneFuture = service.search(ai)
                     .thenApply(l -> processor.process(l, ai))
-                    .thenCompose(consumer)
+                    .thenCompose(r -> consumer.get().apply(r))
                     .exceptionally(t -> {
                         log.error("Handling exception in pipeline not caught by more specific handler", t);
                         return DownloadResult.TRIED_FAILED;

@@ -2,11 +2,13 @@ package dev.polluxus.slskd_downloader.service;
 
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import dev.polluxus.slskd_downloader.client.slskd.response.SlskdGetDownloadResponse;
+import dev.polluxus.slskd_downloader.client.slskd.response.SlskdGetDownloadResponse.SlskdDownloadFileResponse;
 import dev.polluxus.slskd_downloader.config.Config;
 import dev.polluxus.slskd_downloader.client.slskd.SlskdClient;
 import dev.polluxus.slskd_downloader.client.slskd.request.SlskdDownloadRequest;
 import dev.polluxus.slskd_downloader.client.slskd.response.SlskdSearchDetailResponse;
 import dev.polluxus.slskd_downloader.client.slskd.response.SlskdSearchStateResponse;
+import dev.polluxus.slskd_downloader.config.ThreadPoolConfig;
 import dev.polluxus.slskd_downloader.model.AlbumInfo;
 import dev.polluxus.slskd_downloader.model.UserAndFile;
 import dev.polluxus.slskd_downloader.util.FutureUtils;
@@ -16,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -42,6 +45,8 @@ public class SlskdService {
     private List<SlskdGetDownloadResponse> downloadsList;
     private final Map<String, Integer> retryCounts;
 
+    private final Map<String, Set<DownloadSubscription>> subscriptions;
+
     public SlskdService(SlskdClient client) {
 
         this.client = client;
@@ -61,7 +66,8 @@ public class SlskdService {
         this.downloadExecutor = new ScheduledThreadPoolExecutor(2);
         this.downloadsList = new ArrayList<>();
         this.retryCounts = new ConcurrentHashMap<>();
-        this.virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor();
+        this.virtualThreadExecutor = ThreadPoolConfig.VIRTUAL_THREAD_EXECUTOR;
+        this.subscriptions = new ConcurrentHashMap<>();
     }
 
     public SlskdService(Config config) {
@@ -117,6 +123,8 @@ public class SlskdService {
         return this;
     }
 
+    private int pollCount = 0;
+
     @CanIgnoreReturnValue
     public SlskdService startDownloadPoll() {
         if (startedDownloadPoll) {
@@ -142,6 +150,39 @@ public class SlskdService {
                     canDownloadLock.notifyAll();
                 }
             }
+            if (pollCount++ % 5 != 0) {
+                return;
+            }
+            Set<DownloadSubscription> allSubs = subscriptions.values().stream().flatMap(Collection::stream).collect(Collectors.toSet());
+            downloadsList.forEach(gdr -> {
+                var subs = subscriptions.get(gdr.username());
+                if (subs == null || subs.isEmpty()) {
+                    return;
+                }
+                // Remove subs that are getting called with actual args
+                allSubs.removeAll(subs);
+                Map<DownloadSubscription, List<SlskdDownloadFileResponse>> subArgs = subs.stream()
+                        .collect(Collectors.toMap(
+                                Function.identity(),
+                                f -> new ArrayList<>()
+                        ));
+                gdr.directories().stream()
+                        .flatMap(d -> d.files().stream())
+                        .forEach(dfr -> {
+                            boolean found = false;
+                            var it = subs.iterator();
+                            while (!found && it.hasNext()) {
+                                var sub = it.next();
+                                if (sub.filenames().contains(dfr.filename())) {
+                                    subArgs.get(sub).add(dfr);
+                                    found = true;
+                                }
+                            }
+                        });
+                subArgs.forEach((sub, args) -> CompletableFuture.runAsync(() -> sub.callback().accept(args), virtualThreadExecutor));
+            });
+            // Call the remaining ones with an empty list
+            allSubs.forEach((sub) -> CompletableFuture.runAsync(() -> sub.callback().accept(List.of()), virtualThreadExecutor));
         };
         // Run it once inline, blocking the calling thread, to initialise 'can download' properly
         checkCanDownload.run();
@@ -157,7 +198,7 @@ public class SlskdService {
     public SlskdService start() {
 
         startDownloadPoll();
-        startRetrier(false);
+//        startRetrier(false);
         return this;
     }
 
@@ -234,6 +275,24 @@ public class SlskdService {
         }
     }
 
+    public void initiateAndSubscribe(final String hostUser, final List<SlskdDownloadRequest> files, Consumer<List<SlskdDownloadFileResponse>> onUpdate) {
+
+        subscriptions.computeIfAbsent(hostUser, k -> ConcurrentHashMap.newKeySet())
+                .add(new DownloadSubscription(files.stream().map(SlskdDownloadRequest::filename).collect(Collectors.toSet()), onUpdate));
+        initiateDownloads(hostUser, files);
+    }
+
+    public void unsubscribe(final String hostUser, final List<SlskdDownloadRequest> files, Consumer<List<SlskdDownloadFileResponse>> onUpdate) {
+
+        subscriptions.computeIfAbsent(hostUser, k -> ConcurrentHashMap.newKeySet())
+                .remove(new DownloadSubscription(files.stream().map(SlskdDownloadRequest::filename).collect(Collectors.toSet()), onUpdate));
+    }
+
+    public void cancelDownloads(final String hostUser, final List<UUID> fileIds, boolean remove) {
+
+        fileIds.forEach(id -> client.cancelDownload(hostUser, id, remove));
+    }
+
     public boolean initiateDownloads(final String hostUser, final List<SlskdDownloadRequest> files) {
         ensureCanDownload();
 
@@ -259,4 +318,6 @@ public class SlskdService {
             throw new RuntimeException(e);
         }
     }
+
+    private record DownloadSubscription(Set<String> filenames, Consumer<List<SlskdDownloadFileResponse>> callback) { }
 }

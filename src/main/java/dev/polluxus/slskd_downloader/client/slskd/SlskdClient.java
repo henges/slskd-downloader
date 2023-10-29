@@ -160,6 +160,16 @@ public class SlskdClient extends AbstractHttpClient {
         doRequest(req, 201, Void.class);
     }
 
+    public void cancelDownload(final String hostUser, final UUID fileId, boolean remove) {
+
+        ensureAuthValid();
+        final var req =
+                ClassicRequestBuilder.delete(STR."\{baseUrl}\{API_PREFIX}/transfers/downloads/\{hostUser}/\{fileId}?remove=\{remove}")
+                        .addHeader("Authorization", token.headerValue())
+                        .build();
+        doRequest(req, 204, Void.class);
+    }
+
     private SlskdLoginResponse login() {
 
         final var req = ClassicRequestBuilder.post(baseUrl + API_PREFIX + "/session")
