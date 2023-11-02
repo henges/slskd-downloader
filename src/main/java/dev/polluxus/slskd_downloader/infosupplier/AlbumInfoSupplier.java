@@ -106,8 +106,11 @@ public class AlbumInfoSupplier {
                     if (r.releases().isEmpty()) {
                         return this.hasNext();
                     }
-                    final var bestReleaseMatch = r.releases().get(0);
-                    final String artistName = bestReleaseMatch.artistCredit().get(0).artist().name();
+                    // Return either the first official release, or the first release if not present
+                    final var bestReleaseMatch =
+                            r.releases().stream().filter(e -> e.status() != null && e.status().equals("Official")).findFirst()
+                                    .orElse(r.releases().getFirst());
+                    final String artistName = bestReleaseMatch.artistCredit().get(0).name();
                     final String albumName = bestReleaseMatch.title();
                     MusicbrainzRecording recording = client.getRecording(bestReleaseMatch.id());
                     if (recording.media().isEmpty()) {

@@ -22,6 +22,7 @@ public record MusicbrainzReleaseSearchResult(
             String disambiguation,
             @JsonProperty("artist-credit") List<MusicbrainzArtistCredit> artistCredit,
             LocalDate date,
+            String status,
             @JsonProperty("track-count") int trackCount
     ) { }
 

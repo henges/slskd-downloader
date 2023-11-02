@@ -167,7 +167,11 @@ public class SlskdClient extends AbstractHttpClient {
                 ClassicRequestBuilder.delete(STR."\{baseUrl}\{API_PREFIX}/transfers/downloads/\{hostUser}/\{fileId}?remove=\{remove}")
                         .addHeader("Authorization", token.headerValue())
                         .build();
-        doRequest(req, 204, Void.class);
+        try {
+            doRequest(req, 204, Void.class);
+        } catch (Exception e) {
+            log.error("Error {} download from user {} id {}", remove ? "removing" : "cancelling", hostUser, fileId, e);
+        }
     }
 
     private SlskdLoginResponse login() {

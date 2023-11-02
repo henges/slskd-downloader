@@ -1,15 +1,10 @@
 package dev.polluxus.slskd_downloader.client.plex;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.polluxus.slskd_downloader.client.AbstractHttpClient;
 import dev.polluxus.slskd_downloader.client.plex.response.PlexSearchResponse;
-import dev.polluxus.slskd_downloader.client.slskd.request.SlskdSearchRequest;
-import dev.polluxus.slskd_downloader.client.slskd.response.SlskdSearchStateResponse;
 import dev.polluxus.slskd_downloader.config.Config;
 import dev.polluxus.slskd_downloader.config.JacksonConfig;
-import org.apache.hc.client5.http.classic.HttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
-import org.apache.hc.core5.http.ContentType;
 import org.apache.hc.core5.http.io.support.ClassicRequestBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,7 +27,7 @@ public class PlexClient extends AbstractHttpClient {
         this.librarySectionId = librarySectionId;
     }
 
-    public static PlexClient from(Config config) {
+    public static PlexClient create(Config config) {
 
         return new PlexClient(config.plexBaseUrl().orElseThrow(),
                 config.plexToken().orElseThrow(),

@@ -24,7 +24,16 @@ public abstract class AbstractHttpClient {
     protected void validateStatusCode(final int expected, final ClassicHttpResponse resp) {
 
         if (resp.getCode() != expected) {
-            throw new RuntimeException(STR."Expected status code \{expected}, but got \{resp.getCode()}");
+            String body = "<not available>";
+            try {
+                final var entity = resp.getEntity();
+                if (entity != null) {
+                    body = new String(entity.getContent().readAllBytes());
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            throw new RuntimeException(STR."Expected status code \{expected}, but got \{resp.getCode()}: \{body}");
         }
     }
 

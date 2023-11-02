@@ -223,6 +223,8 @@ public class ActiveDownloadProcessor implements Function<ProcessorSearchResult, 
 
     private void cancelAndRemoveAll(final String hostUser, List<UUID> fileIds) {
 
+        // First cancel all the downloads, THEN try to remove them
+        cancelAll(hostUser, fileIds);
         slskdService.cancelDownloads(hostUser, fileIds, true);
     }
 

@@ -17,28 +17,31 @@ import java.util.stream.Stream;
 public class SpotifyClient {
 
     private final SpotifyApi spotify;
+    private ClientCredentials credentials;
 
     private SpotifyClient(final Config config) {
         this.spotify = SpotifyApi.builder()
                 .setClientId(config.spotifyClientId().orElseThrow())
                 .setClientSecret(config.spotifyClientSecret().orElseThrow())
                 .build();
+        this.credentials = null;
     }
 
     public static SpotifyClient create(final Config config) {
 
-        final SpotifyClient client = new SpotifyClient(config);
-        client.init();
-        return client;
+        return new SpotifyClient(config);
     }
 
     private void init() {
-
-        final ClientCredentials credentials = executeUnchecked(spotify.clientCredentials().build());
-        spotify.setAccessToken(credentials.getAccessToken());
+        if (this.credentials == null) {
+            credentials = executeUnchecked(spotify.clientCredentials().build());
+            spotify.setAccessToken(credentials.getAccessToken());
+        }
     }
 
     private <T> T executeUnchecked(AbstractRequest<T> request) {
+
+        init();
 
         try {
             return request.execute();
